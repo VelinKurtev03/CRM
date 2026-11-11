@@ -3,6 +3,7 @@ import axios from 'axios'
 import { ExternalLink, Pencil, UserX } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { ActivityTimeline } from '@/features/activities/activity-timeline'
 import { LogActivityForm } from '@/features/activities/log-activity-form'
 import { NotesSection } from '@/features/notes/notes-section'
 import { formatDate } from '@/utils/format-date'
@@ -14,7 +15,6 @@ import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePermission } from '@/hooks/use-permission'
-import { ACTIVITY_TYPE_LABELS } from '@/services/activity-options'
 import { getContactOverview, type ContactOverview, type TaskStatus } from '@/services/contacts'
 
 const TASK_LABEL: Record<TaskStatus, string> = {
@@ -151,22 +151,7 @@ export function ContactDetailPage() {
           {activities.items.length === 0 ? (
             <EmptyNote>No calls, meetings or other activity logged yet.</EmptyNote>
           ) : (
-            <ul className="space-y-3">
-              {activities.items.map((a) => (
-                <li key={a.id} className="rounded-md border p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
-                    <span className="font-medium">{a.subject}</span>
-                  </div>
-                  {a.description && (
-                    <p className="mt-1 text-sm whitespace-pre-wrap">{a.description}</p>
-                  )}
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    {fullName(a.user)} · {formatDate(a.occurredAt)}
-                  </p>
-                </li>
-              ))}
-            </ul>
+            <ActivityTimeline items={activities.items} />
           )}
         </DetailSection>
       )}

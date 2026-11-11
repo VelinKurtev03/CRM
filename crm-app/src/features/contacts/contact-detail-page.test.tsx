@@ -153,7 +153,8 @@ describe('Contact page', () => {
     const activity = screen.getByText('Kick-off').closest('li')!
     expect(within(activity).getByText('Meeting')).toBeInTheDocument()
     expect(within(activity).getByText('Agreed scope')).toBeInTheDocument()
-    expect(within(activity).getByText(/Ann Lee · Mar 1, 2026/)).toBeInTheDocument()
+    expect(within(activity).getByText(/Ann Lee · \d{1,2}:\d{2}/)).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Sunday, March 1' })).toBeInTheDocument()
 
     expect(screen.getByText('Proposal').closest('li')).toHaveTextContent(
       'me@us.test → alice@initech.test · Mar 2, 2026',

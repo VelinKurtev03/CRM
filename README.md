@@ -106,7 +106,7 @@ and edit or delete it later. See the wiki's Notes page for who can do what.
 
 Log a call, meeting, email, SMS or note against a contact (on the contact page) or a deal (on the deal's edit
 page): a type, a subject, optional details and when it happened (now by default, never in the future). See the
-wiki's Activities page.
+wiki's Activities page. Activities are shown as a timeline grouped by day (Today, Yesterday, then the date).
 
 ## Companies
 
