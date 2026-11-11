@@ -21,6 +21,7 @@ import { leadAttachmentsRouter } from './routes/lead-attachments.js'
 import { leadConvertRouter } from './routes/lead-convert.js'
 import { pipelinesRouter } from './routes/pipelines.js'
 import { leadsRouter } from './routes/leads.js'
+import { activitiesRouter } from './routes/activities.js'
 import { notesRouter } from './routes/notes.js'
 import { quickCreateRouter } from './routes/quick-create.js'
 import { dashboardRouter } from './routes/dashboard.js'
@@ -74,6 +75,7 @@ app.use('/api', leadsRouter)
 app.use('/api', leadAttachmentsRouter)
 app.use('/api', tagsRouter)
 app.use('/api', notesRouter)
+app.use('/api', activitiesRouter)
 app.use('/api', quickCreateRouter)
 
 app.get('/api/openapi.json', (_req, res) => {

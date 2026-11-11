@@ -80,6 +80,8 @@ Swagger UI at **http://localhost:4000/api/docs**; the raw spec is at `/api/opena
 | `POST /notes` | `notes:write` | Add a note to a contact, company or deal (exactly one of `contactId`, `companyId`, `dealId`) |
 | `PATCH /notes/{id}` | `notes:write` | Edit a note (author only) |
 | `DELETE /notes/{id}` | `notes:delete`, or your own | Delete a note |
+| `POST /activities` | `activities:write` | Log a call, meeting, email, SMS or note against a contact and/or deal (`type`, `subject`, optional `description` and `occurredAt`) |
+| `GET /deals/{id}/activities` | `deals:read` + `activities:read` | A deal's activities, newest first (first 50 and the total) |
 | `GET /tags/details` | `contacts:read` | Tags with colour and usage counts |
 | `PATCH /tags/{id}`, `DELETE /tags/{id}` | `tags:manage` | Rename or recolour; delete (removes it from every record) |
 | `POST /contacts/bulk-tags` | `contacts:write` | Add and/or remove tags on up to 500 contacts, all or nothing |

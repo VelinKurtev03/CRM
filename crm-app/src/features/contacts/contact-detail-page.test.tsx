@@ -241,6 +241,17 @@ describe('Contact page', () => {
     expect(screen.getByText('Showing 1 of 80.')).toBeInTheDocument()
   })
 
+  it('offers the log-activity form only to users who may write activities', async () => {
+    renderAt('/contacts/c1', ['contacts:read', 'activities:write'])
+    expect(await screen.findByRole('button', { name: 'Log activity' })).toBeInTheDocument()
+  })
+
+  it('has no log-activity form without activities:write', async () => {
+    renderAt('/contacts/c1')
+    await screen.findByText('Kick-off')
+    expect(screen.queryByRole('button', { name: 'Log activity' })).not.toBeInTheDocument()
+  })
+
   it('handles a missing contact and load errors', async () => {
     vi.mocked(contacts.getContactOverview).mockRejectedValue(apiError(404, 'Contact not found'))
     renderAt('/contacts/gone')

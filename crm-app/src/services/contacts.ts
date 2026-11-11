@@ -211,7 +211,7 @@ type Person = { id: string; firstName: string; lastName: string }
 /** The first few of something, with how many there are in all. */
 type Section<T> = { total: number; items: T[] }
 
-export type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE' | 'OTHER'
+export type ActivityType = 'CALL' | 'EMAIL' | 'MEETING' | 'SMS' | 'NOTE' | 'OTHER'
 export type TaskStatus = 'TODO' | 'IN_PROGRESS' | 'DONE'
 
 export type ContactOverview = {

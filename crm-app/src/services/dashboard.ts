@@ -24,7 +24,7 @@ export type AttentionTask = {
 }
 export type AttentionActivity = {
   id: string
-  type: 'CALL' | 'EMAIL' | 'MEETING' | 'NOTE' | 'OTHER'
+  type: 'CALL' | 'EMAIL' | 'MEETING' | 'SMS' | 'NOTE' | 'OTHER'
   subject: string
   occurredAt: string
   user: { firstName: string; lastName: string }

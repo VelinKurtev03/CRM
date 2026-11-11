@@ -102,6 +102,12 @@ in one place.
 Contact and company pages have a **Notes** section: write a note (preferences, budget, anything worth keeping),
 and edit or delete it later. See the wiki's Notes page for who can do what.
 
+## Activities
+
+Log a call, meeting, email, SMS or note against a contact (on the contact page) or a deal (on the deal's edit
+page): a type, a subject, optional details and when it happened (now by default, never in the future). See the
+wiki's Activities page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

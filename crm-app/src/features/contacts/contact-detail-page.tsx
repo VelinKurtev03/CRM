@@ -3,6 +3,7 @@ import axios from 'axios'
 import { ExternalLink, Pencil, UserX } from 'lucide-react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 
+import { LogActivityForm } from '@/features/activities/log-activity-form'
 import { NotesSection } from '@/features/notes/notes-section'
 import { formatDate } from '@/utils/format-date'
 import { getErrorMessage } from '@/api/client'
@@ -13,20 +14,9 @@ import { Card, CardContent } from '@/components/ui/card'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePermission } from '@/hooks/use-permission'
-import {
-  getContactOverview,
-  type ActivityType,
-  type ContactOverview,
-  type TaskStatus,
-} from '@/services/contacts'
+import { ACTIVITY_TYPE_LABELS } from '@/services/activity-options'
+import { getContactOverview, type ContactOverview, type TaskStatus } from '@/services/contacts'
 
-const ACTIVITY_LABEL: Record<ActivityType, string> = {
-  CALL: 'Call',
-  EMAIL: 'Email',
-  MEETING: 'Meeting',
-  NOTE: 'Note',
-  OTHER: 'Other',
-}
 const TASK_LABEL: Record<TaskStatus, string> = {
   TODO: 'To do',
   IN_PROGRESS: 'In progress',
@@ -48,6 +38,7 @@ export function ContactDetailPage() {
   const { id = '' } = useParams()
   const navigate = useNavigate()
   const canWrite = usePermission('contacts:write')
+  const canLog = usePermission('activities:write')
   const { data, isPending, isError, error } = useQuery({
     queryKey: ['contact', id, 'overview'],
     queryFn: () => getContactOverview(id),
@@ -154,6 +145,9 @@ export function ContactDetailPage() {
 
       {activities && (
         <DetailSection title="Activities" total={activities.total} shown={activities.items.length}>
+          {canLog && (
+            <LogActivityForm target={{ contactId: c.id }} queryKey={['contact', id, 'overview']} />
+          )}
           {activities.items.length === 0 ? (
             <EmptyNote>No calls, meetings or other activity logged yet.</EmptyNote>
           ) : (
@@ -161,7 +155,7 @@ export function ContactDetailPage() {
               {activities.items.map((a) => (
                 <li key={a.id} className="rounded-md border p-3">
                   <div className="flex flex-wrap items-center gap-2">
-                    <Badge variant="outline">{ACTIVITY_LABEL[a.type]}</Badge>
+                    <Badge variant="outline">{ACTIVITY_TYPE_LABELS[a.type]}</Badge>
                     <span className="font-medium">{a.subject}</span>
                   </div>
                   {a.description && (

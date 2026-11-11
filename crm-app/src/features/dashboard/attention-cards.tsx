@@ -34,6 +34,7 @@ const ACTIVITY_ICONS: Record<AttentionActivity['type'], LucideIcon> = {
   CALL: Phone,
   EMAIL: Mail,
   MEETING: Users,
+  SMS: MessageSquare,
   NOTE: StickyNote,
   OTHER: MessageSquare,
 }
@@ -41,6 +42,7 @@ const ACTIVITY_LABELS: Record<AttentionActivity['type'], string> = {
   CALL: 'Call',
   EMAIL: 'Email',
   MEETING: 'Meeting',
+  SMS: 'SMS',
   NOTE: 'Note',
   OTHER: 'Activity',
 }

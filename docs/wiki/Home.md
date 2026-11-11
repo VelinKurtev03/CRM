@@ -24,6 +24,7 @@ A customer relationship manager: contacts, companies, leads, deals, tasks and re
 - Deals: create, edit, search, filter, the board: [[Deals]]
 - Pipelines and stages (admins): [[Pipelines]]
 - Notes on contacts, companies and deals: [[Notes]]
+- Logging calls, meetings, emails and SMS: [[Activities]]
 - Running it safely: [[Security and Operations]]
 - Every endpoint: [[API Reference]]
 

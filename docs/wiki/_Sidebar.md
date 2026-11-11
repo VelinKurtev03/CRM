@@ -8,6 +8,7 @@
 - [[Deals]]
 - [[Pipelines]]
 - [[Notes]]
+- [[Activities]]
 - [[Dashboard]]
 - [[Roles and Permissions]]
 

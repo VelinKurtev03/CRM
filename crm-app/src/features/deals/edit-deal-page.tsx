@@ -8,6 +8,7 @@ import { getErrorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { DealActivities } from '@/features/activities/deal-activities'
 import { getDeal, listPipelines, updateDeal } from '@/services/deals'
 import { DealForm } from './deal-form'
 import { refreshDeals } from './invalidate'
@@ -64,6 +65,7 @@ export function EditDealPage() {
         }}
         onCancel={() => navigate(-1)}
       />
+      <DealActivities dealId={id} />
     </div>
   )
 }

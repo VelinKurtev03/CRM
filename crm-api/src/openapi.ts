@@ -731,6 +731,61 @@ export const openapi = {
         },
       },
     },
+    '/activities': {
+      post: {
+        tags: ['Records'],
+        summary: 'Log an activity',
+        description:
+          'Requires `activities:write` and read access to the record. Give a `contactId`, a `dealId` or both. `type` is CALL, MEETING, EMAIL, SMS or NOTE; `subject` is required (200 characters), `description` is optional (5000). `occurredAt` defaults to now and cannot be in the future. The caller is recorded as the user. Activities appear in the contact overview and on the deal.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['type', 'subject'],
+                properties: {
+                  type: { type: 'string', enum: ['CALL', 'MEETING', 'EMAIL', 'SMS', 'NOTE'] },
+                  subject: { type: 'string', maxLength: 200 },
+                  description: { type: 'string', maxLength: 5000 },
+                  occurredAt: { type: 'string', format: 'date-time' },
+                  contactId: { type: 'string' },
+                  dealId: { type: 'string' },
+                },
+              },
+              example: { type: 'CALL', subject: 'Intro call', contactId: 'abc123' },
+            },
+          },
+        },
+        responses: {
+          '201': {
+            description:
+              '`{ activity: { id, type, subject, description, occurredAt, contactId, dealId, user } }`',
+          },
+          '400': { description: 'Validation failed' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'The contact or deal was not found' },
+        },
+      },
+    },
+    '/deals/{id}/activities': {
+      get: {
+        tags: ['Records'],
+        summary: 'Activities on a deal',
+        description:
+          'Requires `deals:read` and `activities:read`. Returns `{ total, items }` with the 50 most recent, newest first.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: {
+          '200': { description: '`{ total, items }`' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'Deal not found' },
+        },
+      },
+    },
     '/notes': {
       post: {
         tags: ['Records'],
