@@ -12,6 +12,8 @@ The first page after signing in. Every card hides itself if your role can't read
 | **Notifications** | Your latest notifications and unread count | Everyone |
 | **Revenue** | A line chart of revenue won per month for 12 months, with a table view | Managers and admins (`reports:read`) |
 
+Full year-by-year reports are on the **Reports** page: see [[Reports]].
+
 ## Quick actions
 
 Buttons at the top create records in one click, each shown only if your role may create that record: **Add contact**

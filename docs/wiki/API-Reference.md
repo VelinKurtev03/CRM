@@ -36,6 +36,13 @@ Swagger UI at **http://localhost:4000/api/docs**; the raw spec is at `/api/opena
 | `GET /dashboard/revenue` | `reports:read` | Revenue won per month, last 12 months |
 | `GET /dashboard/attention` | signed in | Your open tasks, latest team activity, your notifications |
 
+## Reports
+
+| Endpoint | Needs | Purpose |
+| --- | --- | --- |
+| `GET /reports/monthly-sales?year=` | `reports:read` | Deals won, revenue and average deal for each month of a year, with totals |
+| `GET /reports/revenue?year=` | `reports:read` | Revenue per month with running total and previous year, year-on-year change, revenue by pipeline |
+
 ## Contacts and related
 
 | Endpoint | Needs | Purpose |

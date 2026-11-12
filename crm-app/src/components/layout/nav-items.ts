@@ -1,6 +1,7 @@
 import {
   CalendarDays,
   Building2,
+  ChartColumn,
   CheckSquare,
   Handshake,
   LayoutDashboard,
@@ -30,6 +31,7 @@ export const NAV_ITEMS: NavItem[] = [
   { label: 'Leads', to: '/leads', icon: Target, permission: 'leads:read' },
   { label: 'Tasks', to: '/tasks', icon: CheckSquare, permission: 'tasks:read' },
   { label: 'Calendar', to: '/calendar', icon: CalendarDays },
+  { label: 'Reports', to: '/reports', icon: ChartColumn, permission: 'reports:read' },
   { label: 'Tags', to: '/tags', icon: Tag, permission: 'tags:manage' },
   { label: 'My profile', to: '/profile', icon: UserRound },
   { label: 'Pipelines', to: '/admin/pipelines', icon: Workflow, permission: 'settings:manage' },

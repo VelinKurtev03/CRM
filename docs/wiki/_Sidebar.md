@@ -12,6 +12,7 @@
 - [[Tasks]]
 - [[Calendar]]
 - [[Dashboard]]
+- [[Reports]]
 - [[Roles and Permissions]]
 
 **How it works**

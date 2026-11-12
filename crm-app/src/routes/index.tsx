@@ -21,6 +21,7 @@ import { NewContactPage } from '@/features/contacts/new-contact-page'
 import { CalendarPage } from '@/features/calendar/calendar-page'
 import { TasksPage } from '@/features/tasks/tasks-page'
 import { NewTaskPage } from '@/features/tasks/new-task-page'
+import { ReportsPage } from '@/features/reports/reports-page'
 import { TagsPage } from '@/features/tags/tags-page'
 import { PipelinesPage } from '@/features/admin/pipelines/pipelines-page'
 import { UsersPage } from '@/features/admin/users-page'
@@ -184,6 +185,12 @@ export const routes = [
                   },
                 ],
               },
+            ],
+          },
+          {
+            element: <RequirePermission permission="reports:read" />,
+            children: [
+              { path: '/reports', element: <ReportsPage />, handle: { crumb: 'Sales reports' } },
             ],
           },
           {

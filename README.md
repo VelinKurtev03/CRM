@@ -123,6 +123,16 @@ calls and meetings (logged activities), your own events, tasks assigned to you b
 Step with the arrows, **Today** jumps to now, and a day opens in the Day view. The view and date are in the address.
 **Add** (or the **+** on a day) adds an event or a task, and dragging an event or task to another day, or clicking it, moves it. Available to everyone signed in; a source you can't read is left out. See the wiki's Calendar page.
 
+## Sales reports
+
+**Reports** in the sidebar (`/reports`, needs `reports:read`: Managers and Admins) has two reports for one calendar
+year, chosen with the year picker (this year by default, kept in the address as `?year=`). **Monthly sales** lists, for
+each month, the deals won, their total value and the average deal size, with a total row. **Revenue** shows won revenue
+per month with a running total and the same month a year earlier, the change against the previous year, and revenue by
+pipeline. Only won deals count, placed in the month they closed. Amounts are in US dollars and months follow the
+server's calendar, like the dashboard. The API is `GET /api/reports/monthly-sales` and `GET /api/reports/revenue`
+(both take `?year=`). Filters by owner and pipeline, and export, come later (US-045). See the wiki's Reports page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

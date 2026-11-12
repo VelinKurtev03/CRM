@@ -42,6 +42,10 @@ describe('role permission matrix', () => {
     expect(ROLE_PERMISSIONS.MANAGER).toContain('leads:assign')
     expect(ROLE_PERMISSIONS.SALES).not.toContain('leads:assign')
     expect(ROLE_PERMISSIONS.SUPPORT).not.toContain('leads:assign')
+    // Sales reports are for managers (and admins).
+    expect(ROLE_PERMISSIONS.MANAGER).toContain('reports:read')
+    expect(ROLE_PERMISSIONS.SALES).not.toContain('reports:read')
+    expect(ROLE_PERMISSIONS.SUPPORT).not.toContain('reports:read')
     expect(ROLE_PERMISSIONS.SUPPORT).not.toContain('deals:write')
     expect(ROLE_PERMISSIONS.SUPPORT).not.toContain('leads:read')
   })

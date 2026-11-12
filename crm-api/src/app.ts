@@ -26,6 +26,7 @@ import { notesRouter } from './routes/notes.js'
 import { tasksRouter } from './routes/tasks.js'
 import { calendarRouter } from './routes/calendar.js'
 import { dashboardRouter } from './routes/dashboard.js'
+import { reportsRouter } from './routes/reports.js'
 import { usersRouter } from './routes/users.js'
 import { healthRouter } from './routes/health.js'
 
@@ -65,6 +66,7 @@ app.use('/api', healthRouter)
 app.use('/api', authRouter)
 app.use('/api', usersRouter)
 app.use('/api', dashboardRouter)
+app.use('/api', reportsRouter)
 app.use('/api', contactsExportRouter)
 app.use('/api', contactsImportRouter)
 app.use('/api', contactsRouter)

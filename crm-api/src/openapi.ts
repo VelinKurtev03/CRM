@@ -24,6 +24,7 @@ export const openapi = {
     { name: 'Auth' },
     { name: 'Users' },
     { name: 'Dashboard' },
+    { name: 'Reports', description: 'Sales and revenue reports for managers.' },
     { name: 'Records' },
     { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
     {
@@ -292,6 +293,77 @@ export const openapi = {
               },
             },
           },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/monthly-sales': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Monthly sales report',
+        description:
+          'For each month of a year: deals won, their total value and the average deal size, plus year totals. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Twelve monthly rows and totals',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  months: [{ month: '2026-01', dealsWon: 2, revenue: 1500, averageDeal: 750 }],
+                  totals: { dealsWon: 2, revenue: 1500, averageDeal: 750 },
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/revenue': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Revenue report',
+        description:
+          'Won revenue per month of a year with a running total and the same month a year earlier, the change against the previous year (`changePercent` is null when last year had no revenue) and revenue by pipeline. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Twelve monthly rows, totals and a pipeline split',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  months: [
+                    { month: '2026-01', revenue: 1500, cumulative: 1500, previousYear: 2000 },
+                  ],
+                  totals: { revenue: 1500, previousYear: 2000, changePercent: -25 },
+                  byPipeline: [{ pipelineId: 'clx…', name: 'Sales', revenue: 1500, deals: 2 }],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
         },

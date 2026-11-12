@@ -22,7 +22,7 @@ single source of truth is `crm-api/src/lib/permissions.ts`, which is synced to t
 
 Notes: `contacts:delete_own` lets a person delete contacts they own (Admins and Managers already have `delete` for any).
 `leads:assign` chooses or changes a lead's owner; Sales own the leads they create but cannot hand them out.
-`reports:read` includes the dashboard revenue chart. `users:manage` assigns roles.
+`reports:read` includes the dashboard revenue chart and the sales reports page. `users:manage` assigns roles.
 This table is generated from the matrix in the code, so it is exact as of the last update.
 
 ## Rules worth remembering

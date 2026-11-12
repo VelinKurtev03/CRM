@@ -27,6 +27,7 @@ A customer relationship manager: contacts, companies, leads, deals, tasks and re
 - Logging calls, meetings, emails and SMS: [[Activities]]
 - Creating tasks with an assignee, due date, priority and status, and filtering the task list: [[Tasks]]
 - Day, week and month calendar of your meetings, calls, tasks and deal deadlines: [[Calendar]]
+- Monthly sales and revenue reports for managers: [[Reports]]
 - Running it safely: [[Security and Operations]]
 - Every endpoint: [[API Reference]]
 
