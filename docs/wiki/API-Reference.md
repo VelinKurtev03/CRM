@@ -42,6 +42,8 @@ Swagger UI at **http://localhost:4000/api/docs**; the raw spec is at `/api/opena
 | --- | --- | --- |
 | `GET /reports/monthly-sales?year=` | `reports:read` | Deals won, revenue and average deal for each month of a year, with totals |
 | `GET /reports/revenue?year=` | `reports:read` | Revenue per month with running total and previous year, year-on-year change, revenue by pipeline |
+| `GET /reports/funnel?pipelineId=` | `reports:read` | Deals per stage, deals that reached each stage, stage-to-stage conversion, lost deals, bottleneck |
+| `GET /reports/lead-conversion?year=` | `reports:read` | Leads created in a year: converted, lost, open, rate, by month and by source |
 
 ## Contacts and related
 

@@ -14,7 +14,12 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatMoney, monthDate } from '@/features/dashboard/format'
-import { getMonthlySales, getRevenueReport } from '@/services/reports'
+import {
+  getFunnelReport,
+  getLeadConversion,
+  getMonthlySales,
+  getRevenueReport,
+} from '@/services/reports'
 
 const YEARS_SHOWN = 6
 const selectClass =
@@ -233,6 +238,226 @@ function RevenueCard({ year }: { year: number }) {
   )
 }
 
+const pct = (n: number | null) => (n === null ? '—' : `${Math.round(n)}%`)
+
+function FunnelCard() {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const pipelineId = searchParams.get('pipeline') ?? undefined
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['report-funnel', pipelineId ?? null],
+    queryFn: () => getFunnelReport(pipelineId),
+  })
+  const first = data?.stages[0]?.reached ?? 0
+  const bottleneck = data?.stages.find((s) => s.stageId === data.bottleneckStageId)
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div>
+            <CardTitle>Sales funnel</CardTitle>
+            <CardDescription>
+              {bottleneck
+                ? `Biggest drop: ${bottleneck.name} (${pct(bottleneck.conversionPercent)} move on from the stage before)`
+                : 'Where deals are in the pipeline now'}
+            </CardDescription>
+          </div>
+          {data && data.pipelines.length > 0 && (
+            <select
+              aria-label="Pipeline"
+              value={data.pipeline?.id ?? ''}
+              onChange={(e) =>
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev)
+                    next.set('pipeline', e.target.value)
+                    return next
+                  },
+                  { replace: true },
+                )
+              }
+              className={selectClass}
+            >
+              {data.pipelines.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {isError && <Failed what="the sales funnel" />}
+        {isPending && <Loading label="Loading sales funnel" />}
+        {data && first === 0 && data.lost.deals === 0 && (
+          <EmptyState
+            title="No deals in this pipeline"
+            description="Deals will show up here as they move through the stages."
+          />
+        )}
+        {data && (first > 0 || data.lost.deals > 0) && (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Stage</TableHead>
+                  <TableHead className="text-right">Deals now</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                  <TableHead className="text-right">Reached</TableHead>
+                  <TableHead className="text-right">From previous</TableHead>
+                  <TableHead className="w-1/4">
+                    <span className="sr-only">Share of deals that reached the stage</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.stages.map((s) => (
+                  <TableRow key={s.stageId}>
+                    <TableCell>
+                      {s.name}
+                      {s.stageId === data.bottleneckStageId && (
+                        <span className="ml-2 rounded bg-destructive/10 px-1.5 py-0.5 text-xs text-destructive">
+                          Bottleneck
+                        </span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{s.deals}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(s.value)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">{s.reached}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(s.conversionPercent)}
+                    </TableCell>
+                    <TableCell>
+                      <Bar value={s.reached} max={first} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Lost</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.lost.deals}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatMoney(data.lost.value)}
+                  </TableCell>
+                  <TableCell colSpan={3} />
+                </TableRow>
+              </TableFooter>
+            </Table>
+            <p className="text-xs text-muted-foreground">
+              Reached counts deals in a stage or any later one. It is a snapshot of today, not a
+              history.
+            </p>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function LeadConversionCard({ year }: { year: number }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['report-lead-conversion', year],
+    queryFn: () => getLeadConversion(year),
+  })
+  const max = data ? Math.max(...data.months.map((m) => m.leads)) : 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Lead conversion</CardTitle>
+        <CardDescription>
+          {data && data.totals.leads > 0
+            ? `${data.totals.converted} of ${data.totals.leads} leads created in ${year} became deals (${pct(data.totals.conversionPercent)}) · ${data.totals.lost} lost · ${data.totals.open} still open`
+            : `Leads created in ${year} that became deals`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isError && <Failed what="the lead conversion report" />}
+        {isPending && <Loading label="Loading lead conversion" />}
+        {data && data.totals.leads === 0 && (
+          <EmptyState
+            title={`No leads in ${year}`}
+            description="Leads created in this year will appear here."
+          />
+        )}
+        {data && data.totals.leads > 0 && (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month created</TableHead>
+                  <TableHead className="text-right">Leads</TableHead>
+                  <TableHead className="text-right">Converted</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                  <TableHead className="w-1/4">
+                    <span className="sr-only">Share of the busiest month</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.months.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell>{monthName(m.month)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.leads}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.converted}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(m.conversionPercent)}
+                    </TableCell>
+                    <TableCell>
+                      <Bar value={m.leads} max={max} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.totals.leads}</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.totals.converted}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {pct(data.totals.conversionPercent)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium">By source</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Source</TableHead>
+                    <TableHead className="text-right">Leads</TableHead>
+                    <TableHead className="text-right">Converted</TableHead>
+                    <TableHead className="text-right">Rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.bySource.map((s) => (
+                    <TableRow key={s.source}>
+                      <TableCell>{s.source}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.leads}</TableCell>
+                      <TableCell className="text-right tabular-nums">{s.converted}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(s.conversionPercent)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const thisYear = new Date().getFullYear()
@@ -247,7 +472,9 @@ export function ReportsPage() {
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
           <h1 className="text-2xl font-semibold">Sales reports</h1>
-          <p className="text-sm text-muted-foreground">How the team is performing, by month.</p>
+          <p className="text-sm text-muted-foreground">
+            How the team is performing: sales, funnel and lead conversion.
+          </p>
         </div>
         <select
           aria-label="Year"
@@ -274,6 +501,8 @@ export function ReportsPage() {
       </div>
       <MonthlySalesCard year={year} />
       <RevenueCard year={year} />
+      <FunnelCard />
+      <LeadConversionCard year={year} />
     </div>
   )
 }

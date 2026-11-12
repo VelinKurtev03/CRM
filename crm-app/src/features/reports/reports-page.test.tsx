@@ -54,6 +54,65 @@ const revenue = (year: number, total = 1500, previous = 1000): reports.RevenueRe
   byPipeline: total ? [{ pipelineId: 'p1', name: 'Enterprise', revenue: total, deals: 2 }] : [],
 })
 
+const funnel = (empty = false): reports.FunnelReport => ({
+  pipelines: [
+    { id: 'p1', name: 'Enterprise' },
+    { id: 'p2', name: 'Retail' },
+  ],
+  pipeline: { id: 'p1', name: 'Enterprise' },
+  stages: empty
+    ? []
+    : [
+        {
+          stageId: 's1',
+          name: 'Prospecting',
+          isWon: false,
+          deals: 4,
+          value: 4000,
+          reached: 10,
+          conversionPercent: null,
+        },
+        {
+          stageId: 's2',
+          name: 'Proposal',
+          isWon: false,
+          deals: 3,
+          value: 9000,
+          reached: 6,
+          conversionPercent: 60,
+        },
+        {
+          stageId: 's3',
+          name: 'Closed won',
+          isWon: true,
+          deals: 3,
+          value: 7000,
+          reached: 3,
+          conversionPercent: 50,
+        },
+      ],
+  lost: { deals: empty ? 0 : 2, value: empty ? 0 : 1200 },
+  bottleneckStageId: empty ? null : 's3',
+})
+
+const conversion = (year: number, leads = 10): reports.LeadConversionReport => ({
+  year,
+  months: months(year).map((month, i) => ({
+    month,
+    leads: i === 0 ? leads : 0,
+    converted: i === 0 ? leads / 2 : 0,
+    conversionPercent: i === 0 && leads ? 50 : null,
+  })),
+  totals: {
+    leads,
+    converted: leads / 2,
+    conversionPercent: leads ? 50 : null,
+    lost: leads ? 2 : 0,
+    open: leads ? 3 : 0,
+  },
+  bySource: leads ? [{ source: 'Web', leads, converted: leads / 2, conversionPercent: 50 }] : [],
+})
+
 function renderReports(entry = '/reports', permissions = manager.permissions) {
   useAuthStore.setState({ token: 'jwt', user: { ...manager, permissions }, initialized: true })
   const router = createMemoryRouter(routes, { initialEntries: [entry] })
@@ -71,6 +130,8 @@ beforeEach(() => {
   vi.resetAllMocks()
   vi.mocked(reports.getMonthlySales).mockImplementation(async (y) => sales(y))
   vi.mocked(reports.getRevenueReport).mockImplementation(async (y) => revenue(y))
+  vi.mocked(reports.getFunnelReport).mockImplementation(async () => funnel())
+  vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y))
 })
 
 describe('ReportsPage', () => {
@@ -87,7 +148,13 @@ describe('ReportsPage', () => {
     expect(sold.getByRole('row', { name: /^Total 2 \$1,500 \$750/ })).toBeInTheDocument()
 
     expect(await screen.findByText(/\$1,500 won in .* \+50% vs /)).toBeInTheDocument()
-    expect(screen.getByText('Enterprise')).toBeInTheDocument()
+    expect(
+      within(
+        screen
+          .getByText('Revenue', { selector: '[data-slot="card-title"]' })
+          .closest('[data-slot="card"]')!,
+      ).getByText('Enterprise'),
+    ).toBeInTheDocument()
   })
 
   it('opens on the year in the address and switches year', async () => {
@@ -137,5 +204,54 @@ describe('ReportsPage', () => {
     expect(await screen.findByText('Access denied')).toBeInTheDocument()
     expect(reports.getMonthlySales).not.toHaveBeenCalled()
     expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument()
+  })
+
+  it('shows the sales funnel with its bottleneck and lost deals, and switches pipeline', async () => {
+    renderReports()
+    const card = within((await screen.findByText('Sales funnel')).closest('[data-slot="card"]')!)
+    expect(await card.findByRole('row', { name: /Prospecting 4 \$4,000 10/ })).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /Proposal 3 \$9,000 6 60%/ })).toBeInTheDocument()
+    expect(
+      card.getByRole('row', { name: /Closed won\s?Bottleneck 3 \$7,000 3 50%/ }),
+    ).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /^Lost 2 \$1,200/ })).toBeInTheDocument()
+    expect(card.getByText(/Biggest drop: Closed won \(50%/)).toBeInTheDocument()
+    expect(reports.getFunnelReport).toHaveBeenCalledWith(undefined)
+
+    await userEvent.selectOptions(card.getByLabelText('Pipeline'), 'p2')
+    expect(reports.getFunnelReport).toHaveBeenCalledWith('p2')
+  })
+
+  it('opens the funnel on the pipeline in the address', async () => {
+    renderReports('/reports?pipeline=p2')
+    await screen.findByText('Sales funnel')
+    expect(reports.getFunnelReport).toHaveBeenCalledWith('p2')
+  })
+
+  it('says so when a pipeline has no deals', async () => {
+    vi.mocked(reports.getFunnelReport).mockImplementation(async () => funnel(true))
+    renderReports()
+    expect(await screen.findByText('No deals in this pipeline')).toBeInTheDocument()
+  })
+
+  it('shows lead conversion for the chosen year, by month and source', async () => {
+    renderReports('/reports?year=2024')
+    expect(
+      await screen.findByText(
+        /5 of 10 leads created in 2024 became deals \(50%\) · 2 lost · 3 still open/,
+      ),
+    ).toBeInTheDocument()
+    expect(reports.getLeadConversion).toHaveBeenCalledWith(2024)
+    const card = within(screen.getByText('Lead conversion').closest('[data-slot="card"]')!)
+    expect(card.getByRole('row', { name: /January 10 5 50%/ })).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /Web 10 5 50%/ })).toBeInTheDocument()
+  })
+
+  it('says so when there are no leads, and when a report fails', async () => {
+    vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y, 0))
+    vi.mocked(reports.getFunnelReport).mockRejectedValue(new Error('boom'))
+    renderReports()
+    expect(await screen.findByText(`No leads in ${YEAR}`)).toBeInTheDocument()
+    expect(await screen.findByText('Could not load the sales funnel')).toBeInTheDocument()
   })
 })

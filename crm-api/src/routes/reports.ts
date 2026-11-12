@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { z } from 'zod'
 
+import { HttpError } from '../lib/http-error.js'
 import { prisma } from '../lib/prisma.js'
 import { authenticate } from '../middleware/authenticate.js'
 import { requirePermission } from '../middleware/authorize.js'
@@ -127,6 +128,134 @@ reportsRouter.get(
         changePercent: previousYear > 0 ? ((revenue - previousYear) / previousYear) * 100 : null,
       },
       byPipeline,
+    })
+  },
+)
+
+const funnelQuery = z.object({
+  /** Pipeline to report on; defaults to the default pipeline, else the first one. */
+  pipelineId: z.string().min(1, 'Enter a valid pipeline').optional(),
+})
+
+const percent = (part: number, whole: number) => (whole > 0 ? (part / whole) * 100 : null)
+
+/**
+ * Sales Funnel: for one pipeline, how many deals are at each stage now and how many have got at
+ * least that far (in this stage or a later one, lost deals excluded), with the share that made it
+ * from the previous stage. The weakest step is flagged as the bottleneck. There is no stage
+ * history, so this is a snapshot of where deals are today.
+ */
+reportsRouter.get(
+  '/reports/funnel',
+  authenticate,
+  requirePermission('reports:read'),
+  async (req, res) => {
+    const { pipelineId } = parseQuery(funnelQuery, req.query)
+    const pipelines = await prisma.pipeline.findMany({
+      select: { id: true, name: true, isDefault: true },
+      orderBy: { name: 'asc' },
+    })
+    const chosen = pipelineId
+      ? pipelines.find((p) => p.id === pipelineId)
+      : (pipelines.find((p) => p.isDefault) ?? pipelines[0])
+    if (pipelineId && !chosen) throw new HttpError(404, 'Pipeline not found')
+    const options = pipelines.map(({ id, name }) => ({ id, name }))
+    if (!chosen) {
+      res.json({ pipelines: options, pipeline: null, stages: [], lost: { deals: 0, value: 0 } })
+      return
+    }
+
+    const [stages, deals] = await Promise.all([
+      prisma.stage.findMany({ where: { pipelineId: chosen.id }, orderBy: { position: 'asc' } }),
+      prisma.deal.findMany({
+        where: { pipelineId: chosen.id },
+        select: { amount: true, status: true, stageId: true },
+      }),
+    ])
+    const position = new Map(stages.map((s) => [s.id, s.position]))
+    const lostIds = new Set(stages.filter((s) => s.isLost).map((s) => s.id))
+    const isLost = (d: (typeof deals)[number]) => d.status === 'LOST' || lostIds.has(d.stageId)
+    const live = deals.filter((d) => !isLost(d))
+    const lostDeals = deals.filter(isLost)
+
+    let previous: number | null = null
+    const rows = stages
+      .filter((s) => !s.isLost)
+      .map((s) => {
+        const here = live.filter((d) => d.stageId === s.id)
+        const reached = live.filter((d) => position.get(d.stageId)! >= s.position).length
+        const row = {
+          stageId: s.id,
+          name: s.name,
+          isWon: s.isWon,
+          deals: here.length,
+          value: here.reduce((sum, d) => sum + money(d.amount), 0),
+          reached,
+          // Null for the first stage, or when nothing reached the stage before.
+          conversionPercent: previous === null ? null : percent(reached, previous),
+        }
+        previous = reached
+        return row
+      })
+
+    // The bottleneck is the step that loses the largest share, when anything is lost at all.
+    const steps = rows.filter((r) => r.conversionPercent !== null && r.conversionPercent < 100)
+    const worst = steps.reduce<(typeof rows)[number] | null>(
+      (min, r) => (min === null || r.conversionPercent! < min.conversionPercent! ? r : min),
+      null,
+    )
+
+    res.json({
+      pipelines: options,
+      pipeline: { id: chosen.id, name: chosen.name },
+      stages: rows,
+      lost: { deals: lostDeals.length, value: lostDeals.reduce((s, d) => s + money(d.amount), 0) },
+      bottleneckStageId: worst?.stageId ?? null,
+    })
+  },
+)
+
+/**
+ * Lead Conversion: of the leads created in a year, how many became deals, were lost or are still
+ * open, in total, by month created and by source. A lead counts as converted once it has a deal.
+ */
+reportsRouter.get(
+  '/reports/lead-conversion',
+  authenticate,
+  requirePermission('reports:read'),
+  async (req, res) => {
+    const { year } = parseQuery(yearQuery, req.query)
+    const leads = await prisma.lead.findMany({
+      where: { createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+      select: { createdAt: true, source: true, status: true, dealId: true },
+    })
+    const converted = (l: (typeof leads)[number]) => l.dealId !== null
+    const summarise = (list: typeof leads) => {
+      const won = list.filter(converted).length
+      return { leads: list.length, converted: won, conversionPercent: percent(won, list.length) }
+    }
+
+    const months = Array.from({ length: 12 }, (_, m) => ({
+      month: monthKey(year, m),
+      ...summarise(leads.filter((l) => l.createdAt.getMonth() === m)),
+    }))
+
+    const sources = new Map<string, typeof leads>()
+    for (const l of leads) {
+      const key = l.source?.trim() || 'Unknown'
+      sources.set(key, [...(sources.get(key) ?? []), l])
+    }
+    const bySource = [...sources]
+      .map(([source, list]) => ({ source, ...summarise(list) }))
+      .sort((a, b) => b.leads - a.leads || a.source.localeCompare(b.source))
+
+    const lost = leads.filter((l) => !converted(l) && l.status === 'LOST').length
+    const total = summarise(leads)
+    res.json({
+      year,
+      months,
+      totals: { ...total, lost, open: total.leads - total.converted - lost },
+      bySource,
     })
   },
 )

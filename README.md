@@ -133,6 +133,17 @@ pipeline. Only won deals count, placed in the month they closed. Amounts are in 
 server's calendar, like the dashboard. The API is `GET /api/reports/monthly-sales` and `GET /api/reports/revenue`
 (both take `?year=`). Filters by owner and pipeline, and export, come later (US-045). See the wiki's Reports page.
 
+## Funnel and lead conversion
+
+The same **Reports** page also has a **Sales funnel** and **Lead conversion**. The funnel is for one pipeline (the
+default one, or pick another; kept in the address as `?pipeline=`). For each stage it shows the deals there now and their
+value, how many deals have **reached** that stage (in it or a later one, lost deals excluded), and the share that moved on
+from the stage before; the weakest step is marked **Bottleneck**, and lost deals are totalled at the bottom. There is no
+stage history, so it is a snapshot of today. Lead conversion covers the leads created in the chosen year: how many became
+deals, were lost or are still open, the conversion rate, and the same by month created and by source. The API is
+`GET /api/reports/funnel` (`?pipelineId=`) and `GET /api/reports/lead-conversion` (`?year=`), both needing
+`reports:read`. See the wiki's Reports page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

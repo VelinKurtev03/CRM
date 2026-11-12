@@ -24,7 +24,10 @@ export const openapi = {
     { name: 'Auth' },
     { name: 'Users' },
     { name: 'Dashboard' },
-    { name: 'Reports', description: 'Sales and revenue reports for managers.' },
+    {
+      name: 'Reports',
+      description: 'Sales, revenue, funnel and lead conversion reports for managers.',
+    },
     { name: 'Records' },
     { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
     {
@@ -359,6 +362,87 @@ export const openapi = {
                   ],
                   totals: { revenue: 1500, previousYear: 2000, changePercent: -25 },
                   byPipeline: [{ pipelineId: 'clx…', name: 'Sales', revenue: 1500, deals: 2 }],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/funnel': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Sales funnel report',
+        description:
+          'For one pipeline: the deals at each stage now, how many have reached at least that stage (lost deals excluded), the share that made it from the previous stage and the weakest step (`bottleneckStageId`). Lost deals are totalled apart. It is a snapshot of where deals are today. Defaults to the default pipeline. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'pipelineId',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'Pipeline to report on (defaults to the default pipeline)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Funnel stages, lost deals and the bottleneck',
+            content: {
+              'application/json': {
+                example: {
+                  pipelines: [{ id: 'clx…', name: 'Sales' }],
+                  pipeline: { id: 'clx…', name: 'Sales' },
+                  stages: [
+                    {
+                      stageId: 'clx…',
+                      name: 'New',
+                      isWon: false,
+                      deals: 3,
+                      value: 600,
+                      reached: 7,
+                      conversionPercent: null,
+                    },
+                  ],
+                  lost: { deals: 2, value: 1300 },
+                  bottleneckStageId: 'clx…',
+                },
+              },
+            },
+          },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'Pipeline not found' },
+        },
+      },
+    },
+    '/reports/lead-conversion': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Lead conversion report',
+        description:
+          'Of the leads created in a year: how many became deals, were lost or are still open, with the conversion rate (`conversionPercent` is null with no leads), by month created and by source. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Totals, twelve monthly rows and a source split',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  months: [{ month: '2026-01', leads: 2, converted: 1, conversionPercent: 50 }],
+                  totals: { leads: 5, converted: 2, conversionPercent: 40, lost: 1, open: 2 },
+                  bySource: [{ source: 'Web', leads: 3, converted: 1, conversionPercent: 33.3 }],
                 },
               },
             },
