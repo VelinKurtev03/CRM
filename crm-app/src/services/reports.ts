@@ -71,3 +71,36 @@ export const getLeadConversion = (year: number) =>
   api
     .get<LeadConversionReport>('/reports/lead-conversion', { params: { year } })
     .then((r) => r.data)
+
+export type WinRateRow = { won: number; lost: number; winRatePercent: number | null }
+export type WinRateReport = {
+  year: number
+  months: (WinRateRow & { month: string })[]
+  totals: WinRateRow
+  byPipeline: (WinRateRow & { pipelineId: string; name: string })[]
+}
+
+export type LostDeal = {
+  id: string
+  title: string
+  amount: number
+  pipeline: string
+  owner: string | null
+  closedAt: string
+  daysOpen: number
+}
+export type LostDealsReport = {
+  year: number
+  months: { month: string; deals: number; value: number }[]
+  totals: { deals: number; value: number; averageDeal: number; averageDaysOpen: number }
+  byPipeline: { pipelineId: string; name: string; deals: number; value: number }[]
+  /** The ten biggest, largest first. */
+  biggest: LostDeal[]
+}
+
+/** Both need `reports:read`. */
+export const getWinRate = (year: number) =>
+  api.get<WinRateReport>('/reports/win-rate', { params: { year } }).then((r) => r.data)
+
+export const getLostDeals = (year: number) =>
+  api.get<LostDealsReport>('/reports/lost-deals', { params: { year } }).then((r) => r.data)

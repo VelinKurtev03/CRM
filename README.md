@@ -144,6 +144,15 @@ deals, were lost or are still open, the conversion rate, and the same by month c
 `GET /api/reports/funnel` (`?pipelineId=`) and `GET /api/reports/lead-conversion` (`?year=`), both needing
 `reports:read`. See the wiki's Reports page.
 
+## Win rate and lost deals
+
+Two more reports on **Reports**, for the chosen year. **Win rate** is the share of deals closed in the year that were
+won (won ÷ won + lost), by month and by pipeline; open deals have no outcome yet and are left out. **Lost deals** shows
+how many deals were lost and their value, by month and pipeline, the average days they were open, and the ten biggest
+with owner and days open. Deals count in the month they closed. The CRM does not record why a deal was lost, so there is
+no reason breakdown. The API is `GET /api/reports/win-rate` and `GET /api/reports/lost-deals` (both take `?year=`).
+See the wiki's Reports page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

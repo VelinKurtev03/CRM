@@ -324,3 +324,71 @@ describe('GET /api/reports/lead-conversion', () => {
     })
   })
 })
+
+describe.each(['win-rate', 'lost-deals'])('GET /api/reports/%s access', (path) => {
+  it('requires login, reports:read and a valid year', async () => {
+    expect((await request(app).get(`/api/reports/${path}`)).status).toBe(401)
+    expect((await get(path, 'sales')).status).toBe(403)
+    const bad = await get(path, 'manager', '?year=abc')
+    expect(bad.status).toBe(400)
+    expect(bad.body.error.details.year).toBe('Enter a valid year')
+  })
+})
+
+describe('GET /api/reports/win-rate', () => {
+  it('compares won and lost deals closed in the year, by month and pipeline', async () => {
+    const res = await get('win-rate', 'manager', `?year=${YEAR}`)
+    expect(res.status).toBe(200)
+    // Won: 1000 + 500 (Jan, a), 3000 (Mar, b). Lost: 9999 (Jan, a). The open deal is ignored.
+    expect(res.body.months[0]).toEqual({
+      month: `${YEAR}-01`,
+      won: 2,
+      lost: 1,
+      winRatePercent: (2 / 3) * 100,
+    })
+    expect(res.body.months[1]).toEqual({
+      month: `${YEAR}-02`,
+      won: 0,
+      lost: 0,
+      winRatePercent: null,
+    })
+    expect(res.body.months[2]).toMatchObject({ won: 1, lost: 0, winRatePercent: 100 })
+    expect(res.body.totals).toEqual({ won: 3, lost: 1, winRatePercent: 75 })
+    const mine = res.body.byPipeline.filter((p: { name: string }) => p.name.includes(String(stamp)))
+    expect(mine).toEqual([
+      { pipelineId, name: `rep-a-${stamp}`, won: 2, lost: 1, winRatePercent: (2 / 3) * 100 },
+      { pipelineId: otherPipelineId, name: `rep-b-${stamp}`, won: 1, lost: 0, winRatePercent: 100 },
+    ])
+  })
+
+  it('has no rate for a year with no closed deals', async () => {
+    const res = await get('win-rate', 'manager', '?year=2001')
+    expect(res.body.totals).toEqual({ won: 0, lost: 0, winRatePercent: null })
+  })
+})
+
+describe('GET /api/reports/lost-deals', () => {
+  it('totals the deals lost in the year, by month and pipeline, with the biggest', async () => {
+    const res = await get('lost-deals', 'manager', `?year=${YEAR}`)
+    expect(res.status).toBe(200)
+    expect(res.body.totals).toMatchObject({ deals: 1, value: 9999, averageDeal: 9999 })
+    expect(res.body.months[0]).toEqual({ month: `${YEAR}-01`, deals: 1, value: 9999 })
+    expect(res.body.months[1]).toMatchObject({ deals: 0, value: 0 })
+    expect(res.body.byPipeline).toEqual([
+      { pipelineId, name: `rep-a-${stamp}`, deals: 1, value: 9999 },
+    ])
+    expect(res.body.biggest).toHaveLength(1)
+    expect(res.body.biggest[0]).toMatchObject({
+      amount: 9999,
+      pipeline: `rep-a-${stamp}`,
+      owner: null,
+    })
+    expect(res.body.biggest[0].daysOpen).toBeGreaterThanOrEqual(0)
+  })
+
+  it('is empty for a year with no lost deals', async () => {
+    const res = await get('lost-deals', 'manager', '?year=2001')
+    expect(res.body.totals).toEqual({ deals: 0, value: 0, averageDeal: 0, averageDaysOpen: 0 })
+    expect(res.body.biggest).toEqual([])
+  })
+})

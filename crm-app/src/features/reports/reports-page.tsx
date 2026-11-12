@@ -17,8 +17,10 @@ import { formatMoney, monthDate } from '@/features/dashboard/format'
 import {
   getFunnelReport,
   getLeadConversion,
+  getLostDeals,
   getMonthlySales,
   getRevenueReport,
+  getWinRate,
 } from '@/services/reports'
 
 const YEARS_SHOWN = 6
@@ -458,6 +460,229 @@ function LeadConversionCard({ year }: { year: number }) {
   )
 }
 
+function WinRateCard({ year }: { year: number }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['report-win-rate', year],
+    queryFn: () => getWinRate(year),
+  })
+  const closed = data ? data.totals.won + data.totals.lost : 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Win rate</CardTitle>
+        <CardDescription>
+          {data && closed > 0
+            ? `${pct(data.totals.winRatePercent)} of deals closed in ${year} were won (${data.totals.won} won, ${data.totals.lost} lost)`
+            : `Won deals as a share of deals closed in ${year}`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isError && <Failed what="the win rate report" />}
+        {isPending && <Loading label="Loading win rate" />}
+        {data && closed === 0 && (
+          <EmptyState
+            title={`No closed deals in ${year}`}
+            description="Deals marked as won or lost in this year will appear here."
+          />
+        )}
+        {data && closed > 0 && (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Won</TableHead>
+                  <TableHead className="text-right">Lost</TableHead>
+                  <TableHead className="text-right">Win rate</TableHead>
+                  <TableHead className="w-1/4">
+                    <span className="sr-only">Win rate</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.months.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell>{monthName(m.month)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.won}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.lost}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {pct(m.winRatePercent)}
+                    </TableCell>
+                    <TableCell>
+                      <Bar value={m.winRatePercent ?? 0} max={100} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.totals.won}</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.totals.lost}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {pct(data.totals.winRatePercent)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium">By pipeline</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pipeline</TableHead>
+                    <TableHead className="text-right">Won</TableHead>
+                    <TableHead className="text-right">Lost</TableHead>
+                    <TableHead className="text-right">Win rate</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.byPipeline.map((p) => (
+                    <TableRow key={p.pipelineId}>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{p.won}</TableCell>
+                      <TableCell className="text-right tabular-nums">{p.lost}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {pct(p.winRatePercent)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
+function LostDealsCard({ year }: { year: number }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['report-lost-deals', year],
+    queryFn: () => getLostDeals(year),
+  })
+  const max = data ? Math.max(...data.months.map((m) => m.value)) : 0
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Lost deals</CardTitle>
+        <CardDescription>
+          {data && data.totals.deals > 0
+            ? `${data.totals.deals} deals worth ${formatMoney(data.totals.value)} lost in ${year} · open ${Math.round(data.totals.averageDaysOpen)} days on average`
+            : `Deals lost in ${year}`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isError && <Failed what="the lost deals report" />}
+        {isPending && <Loading label="Loading lost deals" />}
+        {data && data.totals.deals === 0 && (
+          <EmptyState
+            title={`No lost deals in ${year}`}
+            description="Deals moved to a lost stage in this year will appear here."
+          />
+        )}
+        {data && data.totals.deals > 0 && (
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Month</TableHead>
+                  <TableHead className="text-right">Deals lost</TableHead>
+                  <TableHead className="text-right">Value</TableHead>
+                  <TableHead className="w-1/4">
+                    <span className="sr-only">Share of the worst month</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.months.map((m) => (
+                  <TableRow key={m.month}>
+                    <TableCell>{monthName(m.month)}</TableCell>
+                    <TableCell className="text-right tabular-nums">{m.deals}</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(m.value)}
+                    </TableCell>
+                    <TableCell>
+                      <Bar value={m.value} max={max} />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow>
+                  <TableCell>Total</TableCell>
+                  <TableCell className="text-right tabular-nums">{data.totals.deals}</TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatMoney(data.totals.value)}
+                  </TableCell>
+                  <TableCell />
+                </TableRow>
+              </TableFooter>
+            </Table>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium">By pipeline</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Pipeline</TableHead>
+                    <TableHead className="text-right">Deals lost</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.byPipeline.map((p) => (
+                    <TableRow key={p.pipelineId}>
+                      <TableCell>{p.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{p.deals}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(p.value)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium">Biggest lost deals</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Deal</TableHead>
+                    <TableHead>Pipeline</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead className="text-right">Days open</TableHead>
+                    <TableHead className="text-right">Value</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.biggest.map((d) => (
+                    <TableRow key={d.id}>
+                      <TableCell>{d.title}</TableCell>
+                      <TableCell>{d.pipeline}</TableCell>
+                      <TableCell>{d.owner ?? 'Unassigned'}</TableCell>
+                      <TableCell className="text-right tabular-nums">{d.daysOpen}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(d.amount)}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const thisYear = new Date().getFullYear()
@@ -473,7 +698,7 @@ export function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Sales reports</h1>
           <p className="text-sm text-muted-foreground">
-            How the team is performing: sales, funnel and lead conversion.
+            How the team is performing: sales, funnel, lead conversion, win rate and lost deals.
           </p>
         </div>
         <select
@@ -503,6 +728,8 @@ export function ReportsPage() {
       <RevenueCard year={year} />
       <FunnelCard />
       <LeadConversionCard year={year} />
+      <WinRateCard year={year} />
+      <LostDealsCard year={year} />
     </div>
   )
 }

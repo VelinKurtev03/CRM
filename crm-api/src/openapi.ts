@@ -26,7 +26,8 @@ export const openapi = {
     { name: 'Dashboard' },
     {
       name: 'Reports',
-      description: 'Sales, revenue, funnel and lead conversion reports for managers.',
+      description:
+        'Sales, revenue, funnel, lead conversion, win rate and lost deals reports for managers.',
     },
     { name: 'Records' },
     { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
@@ -443,6 +444,89 @@ export const openapi = {
                   months: [{ month: '2026-01', leads: 2, converted: 1, conversionPercent: 50 }],
                   totals: { leads: 5, converted: 2, conversionPercent: 40, lost: 1, open: 2 },
                   bySource: [{ source: 'Web', leads: 3, converted: 1, conversionPercent: 33.3 }],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/win-rate': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Win rate report',
+        description:
+          'Of the deals that closed in a year, the share that were won (won ÷ won + lost), in total, by month and by pipeline. `winRatePercent` is null when nothing closed. Open deals are left out. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Twelve monthly rows, totals and a pipeline split',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  months: [{ month: '2026-01', won: 2, lost: 1, winRatePercent: 66.7 }],
+                  totals: { won: 3, lost: 1, winRatePercent: 75 },
+                  byPipeline: [
+                    { pipelineId: 'clx…', name: 'Sales', won: 3, lost: 1, winRatePercent: 75 },
+                  ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/lost-deals': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Lost deals report',
+        description:
+          'Deals lost in a year: count, value, average size and average days open, by month and pipeline, and the ten biggest with owner and days open. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'Totals, twelve monthly rows, a pipeline split and the biggest lost deals',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  months: [{ month: '2026-01', deals: 1, value: 9999 }],
+                  totals: { deals: 1, value: 9999, averageDeal: 9999, averageDaysOpen: 21 },
+                  byPipeline: [{ pipelineId: 'clx…', name: 'Sales', deals: 1, value: 9999 }],
+                  biggest: [
+                    {
+                      id: 'clx…',
+                      title: 'Acme renewal',
+                      amount: 9999,
+                      pipeline: 'Sales',
+                      owner: 'Sam Seller',
+                      closedAt: '2026-01-15T10:00:00.000Z',
+                      daysOpen: 21,
+                    },
+                  ],
                 },
               },
             },

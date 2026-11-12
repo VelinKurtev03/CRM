@@ -259,3 +259,120 @@ reportsRouter.get(
     })
   },
 )
+
+/** Deals that closed (won or lost) in `year`, with the month they closed in. */
+async function closedDeals(year: number, status: 'WON' | 'LOST') {
+  return prisma.deal.findMany({
+    where: { status, closedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+    select: {
+      id: true,
+      title: true,
+      amount: true,
+      closedAt: true,
+      createdAt: true,
+      pipelineId: true,
+      owner: { select: { firstName: true, lastName: true } },
+    },
+  })
+}
+
+/**
+ * Win Rate: of the deals that closed in a year, the share that were won (won ÷ won + lost), in
+ * total, by month and by pipeline. Open deals have no outcome yet, so they are left out.
+ */
+reportsRouter.get(
+  '/reports/win-rate',
+  authenticate,
+  requirePermission('reports:read'),
+  async (req, res) => {
+    const { year } = parseQuery(yearQuery, req.query)
+    const [won, lost, pipelines] = await Promise.all([
+      closedDeals(year, 'WON'),
+      closedDeals(year, 'LOST'),
+      prisma.pipeline.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    ])
+    const row = (w: typeof won, l: typeof lost) => ({
+      won: w.length,
+      lost: l.length,
+      // Null when nothing closed, so "no data" is not shown as 0%.
+      winRatePercent: percent(w.length, w.length + l.length),
+    })
+    const months = Array.from({ length: 12 }, (_, m) => ({
+      month: monthKey(year, m),
+      ...row(
+        won.filter((d) => d.closedAt!.getMonth() === m),
+        lost.filter((d) => d.closedAt!.getMonth() === m),
+      ),
+    }))
+    const byPipeline = pipelines
+      .map((p) => ({
+        pipelineId: p.id,
+        name: p.name,
+        ...row(
+          won.filter((d) => d.pipelineId === p.id),
+          lost.filter((d) => d.pipelineId === p.id),
+        ),
+      }))
+      .filter((p) => p.won + p.lost > 0)
+      .sort((a, b) => b.won + b.lost - (a.won + a.lost))
+    res.json({ year, months, totals: row(won, lost), byPipeline })
+  },
+)
+
+/**
+ * Lost Deals: deals lost in a year with their total value, by month and pipeline, and the
+ * biggest ones with how long they were open. (The CRM does not record a loss reason.)
+ */
+reportsRouter.get(
+  '/reports/lost-deals',
+  authenticate,
+  requirePermission('reports:read'),
+  async (req, res) => {
+    const { year } = parseQuery(yearQuery, req.query)
+    const [lost, pipelines] = await Promise.all([
+      closedDeals(year, 'LOST'),
+      prisma.pipeline.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    ])
+    const value = (list: typeof lost) => list.reduce((s, d) => s + money(d.amount), 0)
+    const daysOpen = (d: (typeof lost)[number]) =>
+      Math.max(0, Math.round((d.closedAt!.getTime() - d.createdAt.getTime()) / 86_400_000))
+    const names = new Map(pipelines.map((p) => [p.id, p.name]))
+
+    const months = Array.from({ length: 12 }, (_, m) => {
+      const inMonth = lost.filter((d) => d.closedAt!.getMonth() === m)
+      return { month: monthKey(year, m), deals: inMonth.length, value: value(inMonth) }
+    })
+    const byPipeline = pipelines
+      .map((p) => {
+        const mine = lost.filter((d) => d.pipelineId === p.id)
+        return { pipelineId: p.id, name: p.name, deals: mine.length, value: value(mine) }
+      })
+      .filter((p) => p.deals > 0)
+      .sort((a, b) => b.value - a.value)
+    const biggest = [...lost]
+      .sort((a, b) => money(b.amount) - money(a.amount))
+      .slice(0, 10)
+      .map((d) => ({
+        id: d.id,
+        title: d.title,
+        amount: money(d.amount),
+        pipeline: names.get(d.pipelineId) ?? '',
+        owner: d.owner ? `${d.owner.firstName} ${d.owner.lastName}` : null,
+        closedAt: d.closedAt!.toISOString(),
+        daysOpen: daysOpen(d),
+      }))
+
+    res.json({
+      year,
+      months,
+      totals: {
+        deals: lost.length,
+        value: value(lost),
+        averageDeal: lost.length ? value(lost) / lost.length : 0,
+        averageDaysOpen: lost.length ? lost.reduce((s, d) => s + daysOpen(d), 0) / lost.length : 0,
+      },
+      byPipeline,
+      biggest,
+    })
+  },
+)

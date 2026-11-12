@@ -113,6 +113,57 @@ const conversion = (year: number, leads = 10): reports.LeadConversionReport => (
   bySource: leads ? [{ source: 'Web', leads, converted: leads / 2, conversionPercent: 50 }] : [],
 })
 
+const winRate = (year: number, closed = true): reports.WinRateReport => ({
+  year,
+  months: months(year).map((month, i) => ({
+    month,
+    won: i === 0 && closed ? 3 : 0,
+    lost: i === 0 && closed ? 1 : 0,
+    winRatePercent: i === 0 && closed ? 75 : null,
+  })),
+  totals: closed
+    ? { won: 3, lost: 1, winRatePercent: 75 }
+    : { won: 0, lost: 0, winRatePercent: null },
+  byPipeline: closed
+    ? [{ pipelineId: 'p1', name: 'Enterprise', won: 3, lost: 1, winRatePercent: 75 }]
+    : [],
+})
+
+const lostDeals = (year: number, any = true): reports.LostDealsReport => ({
+  year,
+  months: months(year).map((month, i) => ({
+    month,
+    deals: i === 0 && any ? 2 : 0,
+    value: i === 0 && any ? 5000 : 0,
+  })),
+  totals: any
+    ? { deals: 2, value: 5000, averageDeal: 2500, averageDaysOpen: 30 }
+    : { deals: 0, value: 0, averageDeal: 0, averageDaysOpen: 0 },
+  byPipeline: any ? [{ pipelineId: 'p1', name: 'Enterprise', deals: 2, value: 5000 }] : [],
+  biggest: any
+    ? [
+        {
+          id: 'd1',
+          title: 'Acme renewal',
+          amount: 4000,
+          pipeline: 'Enterprise',
+          owner: 'Sam Seller',
+          closedAt: new Date(year, 0, 15).toISOString(),
+          daysOpen: 40,
+        },
+        {
+          id: 'd2',
+          title: 'Orphan deal',
+          amount: 1000,
+          pipeline: 'Enterprise',
+          owner: null,
+          closedAt: new Date(year, 0, 20).toISOString(),
+          daysOpen: 20,
+        },
+      ]
+    : [],
+})
+
 function renderReports(entry = '/reports', permissions = manager.permissions) {
   useAuthStore.setState({ token: 'jwt', user: { ...manager, permissions }, initialized: true })
   const router = createMemoryRouter(routes, { initialEntries: [entry] })
@@ -132,6 +183,8 @@ beforeEach(() => {
   vi.mocked(reports.getRevenueReport).mockImplementation(async (y) => revenue(y))
   vi.mocked(reports.getFunnelReport).mockImplementation(async () => funnel())
   vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y))
+  vi.mocked(reports.getWinRate).mockImplementation(async (y) => winRate(y))
+  vi.mocked(reports.getLostDeals).mockImplementation(async (y) => lostDeals(y))
 })
 
 describe('ReportsPage', () => {
@@ -253,5 +306,48 @@ describe('ReportsPage', () => {
     renderReports()
     expect(await screen.findByText(`No leads in ${YEAR}`)).toBeInTheDocument()
     expect(await screen.findByText('Could not load the sales funnel')).toBeInTheDocument()
+  })
+
+  it('shows the win rate by month and pipeline for the chosen year', async () => {
+    renderReports('/reports?year=2024')
+    expect(
+      await screen.findByText('75% of deals closed in 2024 were won (3 won, 1 lost)'),
+    ).toBeInTheDocument()
+    expect(reports.getWinRate).toHaveBeenCalledWith(2024)
+    const card = within(
+      screen
+        .getByText('Win rate', { selector: '[data-slot="card-title"]' })
+        .closest('[data-slot="card"]')!,
+    )
+    expect(card.getByRole('row', { name: /January 3 1 75%/ })).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /February 0 0 —/ })).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /Enterprise 3 1 75%/ })).toBeInTheDocument()
+  })
+
+  it('shows lost deals with totals, pipelines and the biggest deals', async () => {
+    renderReports()
+    expect(
+      await screen.findByText(`2 deals worth $5,000 lost in ${YEAR} · open 30 days on average`),
+    ).toBeInTheDocument()
+    expect(reports.getLostDeals).toHaveBeenCalledWith(YEAR)
+    const card = within(
+      screen
+        .getByText('Lost deals', { selector: '[data-slot="card-title"]' })
+        .closest('[data-slot="card"]')!,
+    )
+    expect(
+      card.getByRole('row', { name: /Acme renewal Enterprise Sam Seller 40 \$4,000/ }),
+    ).toBeInTheDocument()
+    expect(
+      card.getByRole('row', { name: /Orphan deal Enterprise Unassigned 20 \$1,000/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('says so when no deals closed, and when these reports fail', async () => {
+    vi.mocked(reports.getWinRate).mockImplementation(async (y) => winRate(y, false))
+    vi.mocked(reports.getLostDeals).mockRejectedValue(new Error('boom'))
+    renderReports()
+    expect(await screen.findByText(`No closed deals in ${YEAR}`)).toBeInTheDocument()
+    expect(await screen.findByText('Could not load the lost deals report')).toBeInTheDocument()
   })
 })

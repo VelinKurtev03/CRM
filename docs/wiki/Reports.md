@@ -38,6 +38,18 @@ For the leads **created** in the chosen year: the number that became deals (a le
 many were lost, how many are still open, and the conversion rate. A table by month created and one by source (leads with
 no source are "Unknown") show where leads convert best. With no leads the rate is blank, not 0%.
 
+## Win rate
+
+Of the deals that **closed** in the year, the share that were **won**: won ÷ (won + lost). Shown for the year, each
+month and each pipeline (pipelines with no closed deals are left out). Months with nothing closed show "—", not 0%.
+Open deals have no outcome yet and are not counted.
+
+## Lost deals
+
+Deals with status **Lost**, in the month they closed: the number and value lost per month and per pipeline, the average
+days a lost deal had been open (created to closed), and the **ten biggest** with pipeline, owner (or Unassigned) and days
+open. The CRM does not record a reason for losing a deal, so there is no breakdown by reason.
+
 ## How it is counted
 
 - Monthly sales and Revenue count only deals with status **Won**, in the month of their **closed** date. Open and lost deals never appear.
@@ -53,5 +65,8 @@ no source are "Unknown") show where leads convert best. With no leads the rate i
 
 | `GET /reports/funnel?pipelineId=` | `reports:read` | Stages with `deals`, `value`, `reached`, `conversionPercent`, the `lost` totals and `bottleneckStageId`; 404 for an unknown pipeline |
 | `GET /reports/lead-conversion?year=` | `reports:read` | Twelve monthly rows, `totals` (leads, converted, lost, open, rate) and `bySource` |
+
+| `GET /reports/win-rate?year=` | `reports:read` | Monthly `won`, `lost`, `winRatePercent`, totals and `byPipeline` |
+| `GET /reports/lost-deals?year=` | `reports:read` | Totals (count, value, average, average days open), `months`, `byPipeline` and the ten `biggest` |
 
 `year` is 2000 to 2100 and defaults to the current year; anything else is a 400.
