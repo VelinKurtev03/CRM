@@ -504,3 +504,63 @@ describe('GET /api/reports/team-performance', () => {
     })
   })
 })
+
+describe('report filters', () => {
+  it('rejects bad dates and ranges', async () => {
+    const outside = await get('monthly-sales', 'manager', `?year=${YEAR}&from=${YEAR - 1}-12-31`)
+    expect(outside.status).toBe(400)
+    expect(outside.body.error.details.from).toBe(`Choose a date in ${YEAR}`)
+    const backwards = await get(
+      'win-rate',
+      'manager',
+      `?year=${YEAR}&from=${YEAR}-05-01&to=${YEAR}-04-01`,
+    )
+    expect(backwards.body.error.details.to).toBe('End date must be after the start')
+    const junk = await get('revenue', 'manager', `?year=${YEAR}&to=soon`)
+    expect(junk.body.error.details.to).toBe('Enter a valid date (YYYY-MM-DD)')
+  })
+
+  it('narrows to a date range, treating the end date as inclusive', async () => {
+    // Won deals: Jan 10, Jan 20, Mar 5. Ending on Jan 20 keeps the first two.
+    const res = await get('monthly-sales', 'manager', `?year=${YEAR}&to=${YEAR}-01-20`)
+    expect(res.body.totals).toMatchObject({ dealsWon: 2, revenue: 1500 })
+    const from = await get('monthly-sales', 'manager', `?year=${YEAR}&from=${YEAR}-01-11`)
+    expect(from.body.totals).toMatchObject({ dealsWon: 2, revenue: 3500 })
+  })
+
+  it('compares with the same dates a year earlier', async () => {
+    // The previous-year deal closed Jan 3, so a range from Jan 5 leaves it out.
+    const all = await get('revenue', 'manager', `?year=${YEAR}`)
+    expect(all.body.totals.previousYear).toBe(2000)
+    const later = await get('revenue', 'manager', `?year=${YEAR}&from=${YEAR}-01-05`)
+    expect(later.body.totals.previousYear).toBe(0)
+  })
+
+  it('filters by pipeline', async () => {
+    const res = await get('win-rate', 'manager', `?year=${YEAR}&pipelineId=${otherPipelineId}`)
+    expect(res.body.totals).toEqual({ won: 1, lost: 0, winRatePercent: 100 })
+    const sales = await get('monthly-sales', 'manager', `?year=${YEAR}&pipelineId=${pipelineId}`)
+    expect(sales.body.totals).toMatchObject({ dealsWon: 2, revenue: 1500 })
+  })
+
+  it('filters by owner, and treats empty values as not set', async () => {
+    const owners = await get('filter-options', 'manager')
+    expect(owners.status).toBe(200)
+    expect(owners.body.pipelines.map((p: { id: string }) => p.id)).toContain(pipelineId)
+    const sam = owners.body.owners.find((o: { name: string }) => o.name === 'sales Rep')
+    const res = await get('team-performance', 'manager', `?year=${TEAM_YEAR}&ownerId=${sam.id}`)
+    expect(res.body.members.map((m: { name: string }) => m.name)).toEqual(['sales Rep'])
+    expect(res.body.totals.revenue).toBe(3000)
+    const mine = await get('win-rate', 'manager', `?year=${TEAM_YEAR}&ownerId=${sam.id}`)
+    expect(mine.body.totals).toEqual({ won: 2, lost: 1, winRatePercent: (2 / 3) * 100 })
+    const none = await get('win-rate', 'manager', `?year=${YEAR}&ownerId=${sam.id}`)
+    expect(none.body.totals.won).toBe(0)
+    const blank = await get('win-rate', 'manager', `?year=${YEAR}&from=&to=`)
+    expect(blank.body.totals.won).toBe(3)
+  })
+
+  it('lists the filter options only with reports:read', async () => {
+    expect((await request(app).get('/api/reports/filter-options')).status).toBe(401)
+    expect((await get('filter-options', 'sales')).status).toBe(403)
+  })
+})

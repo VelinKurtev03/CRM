@@ -58,6 +58,17 @@ year and how many became deals, and activities they logged. As of **today**: ope
 how many are overdue. Tasks do not record when they were finished, so "tasks done" counts done tasks last updated in the
 year. People with nothing to show are left out, and deals with no owner are not attributed to anyone.
 
+## Filters and export
+
+The bar at the top narrows every report at once and is kept in the address:
+
+- **Year**, then **From** and **To** dates inside that year (the end date is included). Changing the year clears the dates. A start after the end is refused.
+- **Owner**: only deals, leads and so on owned by that person. In Team performance it leaves just that person's row.
+- **Pipeline**: only deals in that pipeline. Leads have no pipeline, so it does not apply to Lead conversion, and the people's leads, activities and tasks in Team performance are not filtered by it. The Sales funnel shows the chosen pipeline, or the default one.
+- Dates apply to deals by the day they closed and to leads by the day they were created. Revenue's "previous year" is the same dates a year earlier.
+
+**Export CSV** on each report saves what is on screen (all of its tables) with the filters at the top. Names that start with `=`, `+`, `-` or `@` are prefixed with an apostrophe so spreadsheets don't treat them as formulas. A report that has not loaded cannot be exported.
+
 ## How it is counted
 
 - Monthly sales and Revenue count only deals with status **Won**, in the month of their **closed** date. Open and lost deals never appear.
@@ -78,5 +89,9 @@ year. People with nothing to show are left out, and deals with no owner are not 
 | `GET /reports/lost-deals?year=` | `reports:read` | Totals (count, value, average, average days open), `months`, `byPipeline` and the ten `biggest` |
 
 | `GET /reports/team-performance?year=` | `reports:read` | `members` (one row per person, by revenue) and team `totals` |
+
+| `GET /reports/filter-options` | `reports:read` | `owners` and `pipelines` for the filter bar |
+
+Every report except the funnel also takes `from`, `to` (`YYYY-MM-DD`, inside `year`), `ownerId` and `pipelineId`; the funnel takes `pipelineId` and `ownerId`. Empty values mean not set.
 
 `year` is 2000 to 2100 and defaults to the current year; anything else is a 400.

@@ -161,6 +161,17 @@ tasks done, open and overdue. Deals count in the month they closed; open deals a
 completion date, so "done" counts done tasks last updated in the year. People with nothing to show are left out. The
 API is `GET /api/reports/team-performance` (`?year=`), needing `reports:read`. See the wiki's Reports page.
 
+## Report filters and export
+
+The **Reports** page has a filter bar: the year, a **From** and **To** date inside it (the end date is included), an
+**Owner** and a **Pipeline**. It applies to every report and is kept in the address, so a filtered view can be shared as a
+link. Dates narrow deals by the day they closed and leads by the day they were created; the pipeline filter does not
+apply to leads, which have no pipeline; the sales funnel shows the chosen pipeline, or the default one. Revenue compares
+with the same dates a year earlier. Each report has **Export CSV**, which saves what it shows with the filters used at
+the top. Text that starts with `=`, `+`, `-` or `@` is prefixed so a spreadsheet won't run it as a formula. The API takes
+`from`, `to`, `ownerId` and `pipelineId` beside `year` on every report (the funnel takes `ownerId`), and
+`GET /api/reports/filter-options` lists the owners and pipelines. See the wiki's Reports page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

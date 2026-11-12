@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import { vi } from 'vitest'
@@ -7,8 +7,10 @@ import { vi } from 'vitest'
 import { routes } from '@/routes'
 import * as reports from '@/services/reports'
 import { useAuthStore } from '@/store/auth-store'
+import * as csv from '@/utils/csv'
 
 vi.mock('@/services/reports')
+vi.mock('@/utils/csv')
 // The dashboard loads on other routes' redirects; keep it quiet.
 vi.mock('@/services/dashboard')
 
@@ -225,13 +227,23 @@ function renderReports(entry = '/reports', permissions = manager.permissions) {
 
 beforeEach(() => {
   vi.resetAllMocks()
-  vi.mocked(reports.getMonthlySales).mockImplementation(async (y) => sales(y))
-  vi.mocked(reports.getRevenueReport).mockImplementation(async (y) => revenue(y))
+  vi.mocked(reports.getMonthlySales).mockImplementation(async ({ year: y }) => sales(y))
+  vi.mocked(reports.getRevenueReport).mockImplementation(async ({ year: y }) => revenue(y))
   vi.mocked(reports.getFunnelReport).mockImplementation(async () => funnel())
-  vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y))
-  vi.mocked(reports.getWinRate).mockImplementation(async (y) => winRate(y))
-  vi.mocked(reports.getLostDeals).mockImplementation(async (y) => lostDeals(y))
-  vi.mocked(reports.getTeamPerformance).mockImplementation(async (y) => team(y))
+  vi.mocked(reports.getLeadConversion).mockImplementation(async ({ year: y }) => conversion(y))
+  vi.mocked(reports.getWinRate).mockImplementation(async ({ year: y }) => winRate(y))
+  vi.mocked(reports.getLostDeals).mockImplementation(async ({ year: y }) => lostDeals(y))
+  vi.mocked(reports.getFilterOptions).mockResolvedValue({
+    owners: [
+      { id: 'u1', name: 'Sam Seller' },
+      { id: 'u2', name: 'Nora Newbie' },
+    ],
+    pipelines: [
+      { id: 'p1', name: 'Enterprise' },
+      { id: 'p2', name: 'Retail' },
+    ],
+  })
+  vi.mocked(reports.getTeamPerformance).mockImplementation(async ({ year: y }) => team(y))
 })
 
 describe('ReportsPage', () => {
@@ -239,8 +251,8 @@ describe('ReportsPage', () => {
     renderReports()
 
     expect(await screen.findByRole('heading', { name: 'Sales reports' })).toBeInTheDocument()
-    expect(reports.getMonthlySales).toHaveBeenCalledWith(YEAR)
-    expect(reports.getRevenueReport).toHaveBeenCalledWith(YEAR)
+    expect(reports.getMonthlySales).toHaveBeenCalledWith({ year: YEAR })
+    expect(reports.getRevenueReport).toHaveBeenCalledWith({ year: YEAR })
 
     expect(await screen.findByText(`Deals won in ${YEAR}, by the month they closed`)).toBeVisible()
     const sold = within(screen.getByText('Monthly sales').closest('[data-slot="card"]')!)
@@ -266,13 +278,13 @@ describe('ReportsPage', () => {
     expect(
       await screen.findByText(`Deals won in ${YEAR - 1}, by the month they closed`),
     ).toBeVisible()
-    expect(reports.getMonthlySales).toHaveBeenCalledWith(YEAR - 1)
-    expect(reports.getRevenueReport).toHaveBeenCalledWith(YEAR - 1)
+    expect(reports.getMonthlySales).toHaveBeenCalledWith({ year: YEAR - 1 })
+    expect(reports.getRevenueReport).toHaveBeenCalledWith({ year: YEAR - 1 })
   })
 
   it('says so when there are no sales or revenue', async () => {
-    vi.mocked(reports.getMonthlySales).mockImplementation(async (y) => sales(y, 0))
-    vi.mocked(reports.getRevenueReport).mockImplementation(async (y) => revenue(y, 0, 0))
+    vi.mocked(reports.getMonthlySales).mockImplementation(async ({ year: y }) => sales(y, 0))
+    vi.mocked(reports.getRevenueReport).mockImplementation(async ({ year: y }) => revenue(y, 0, 0))
     renderReports()
 
     expect(await screen.findByText(`No sales in ${YEAR}`)).toBeInTheDocument()
@@ -280,7 +292,9 @@ describe('ReportsPage', () => {
   })
 
   it('explains when last year has nothing to compare with', async () => {
-    vi.mocked(reports.getRevenueReport).mockImplementation(async (y) => revenue(y, 1500, 0))
+    vi.mocked(reports.getRevenueReport).mockImplementation(async ({ year: y }) =>
+      revenue(y, 1500, 0),
+    )
     renderReports()
     expect(
       await screen.findByText(new RegExp(`No revenue in ${YEAR - 1} to compare with`)),
@@ -306,7 +320,7 @@ describe('ReportsPage', () => {
     expect(screen.queryByRole('link', { name: 'Reports' })).not.toBeInTheDocument()
   })
 
-  it('shows the sales funnel with its bottleneck and lost deals, and switches pipeline', async () => {
+  it('shows the sales funnel with its bottleneck and lost deals', async () => {
     renderReports()
     const card = within((await screen.findByText('Sales funnel')).closest('[data-slot="card"]')!)
     expect(await card.findByRole('row', { name: /Prospecting 4 \$4,000 10/ })).toBeInTheDocument()
@@ -316,16 +330,13 @@ describe('ReportsPage', () => {
     ).toBeInTheDocument()
     expect(card.getByRole('row', { name: /^Lost 2 \$1,200/ })).toBeInTheDocument()
     expect(card.getByText(/Biggest drop: Closed won \(50%/)).toBeInTheDocument()
-    expect(reports.getFunnelReport).toHaveBeenCalledWith(undefined)
-
-    await userEvent.selectOptions(card.getByLabelText('Pipeline'), 'p2')
-    expect(reports.getFunnelReport).toHaveBeenCalledWith('p2')
+    expect(reports.getFunnelReport).toHaveBeenCalledWith(undefined, undefined)
   })
 
   it('opens the funnel on the pipeline in the address', async () => {
     renderReports('/reports?pipeline=p2')
     await screen.findByText('Sales funnel')
-    expect(reports.getFunnelReport).toHaveBeenCalledWith('p2')
+    expect(reports.getFunnelReport).toHaveBeenCalledWith('p2', undefined)
   })
 
   it('says so when a pipeline has no deals', async () => {
@@ -341,14 +352,14 @@ describe('ReportsPage', () => {
         /5 of 10 leads created in 2024 became deals \(50%\) · 2 lost · 3 still open/,
       ),
     ).toBeInTheDocument()
-    expect(reports.getLeadConversion).toHaveBeenCalledWith(2024)
+    expect(reports.getLeadConversion).toHaveBeenCalledWith({ year: 2024 })
     const card = within(screen.getByText('Lead conversion').closest('[data-slot="card"]')!)
     expect(card.getByRole('row', { name: /January 10 5 50%/ })).toBeInTheDocument()
     expect(card.getByRole('row', { name: /Web 10 5 50%/ })).toBeInTheDocument()
   })
 
   it('says so when there are no leads, and when a report fails', async () => {
-    vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y, 0))
+    vi.mocked(reports.getLeadConversion).mockImplementation(async ({ year: y }) => conversion(y, 0))
     vi.mocked(reports.getFunnelReport).mockRejectedValue(new Error('boom'))
     renderReports()
     expect(await screen.findByText(`No leads in ${YEAR}`)).toBeInTheDocument()
@@ -360,7 +371,7 @@ describe('ReportsPage', () => {
     expect(
       await screen.findByText('75% of deals closed in 2024 were won (3 won, 1 lost)'),
     ).toBeInTheDocument()
-    expect(reports.getWinRate).toHaveBeenCalledWith(2024)
+    expect(reports.getWinRate).toHaveBeenCalledWith({ year: 2024 })
     const card = within(
       screen
         .getByText('Win rate', { selector: '[data-slot="card-title"]' })
@@ -376,7 +387,7 @@ describe('ReportsPage', () => {
     expect(
       await screen.findByText(`2 deals worth $5,000 lost in ${YEAR} · open 30 days on average`),
     ).toBeInTheDocument()
-    expect(reports.getLostDeals).toHaveBeenCalledWith(YEAR)
+    expect(reports.getLostDeals).toHaveBeenCalledWith({ year: YEAR })
     const card = within(
       screen
         .getByText('Lost deals', { selector: '[data-slot="card-title"]' })
@@ -391,7 +402,7 @@ describe('ReportsPage', () => {
   })
 
   it('says so when no deals closed, and when these reports fail', async () => {
-    vi.mocked(reports.getWinRate).mockImplementation(async (y) => winRate(y, false))
+    vi.mocked(reports.getWinRate).mockImplementation(async ({ year: y }) => winRate(y, false))
     vi.mocked(reports.getLostDeals).mockRejectedValue(new Error('boom'))
     renderReports()
     expect(await screen.findByText(`No closed deals in ${YEAR}`)).toBeInTheDocument()
@@ -405,7 +416,7 @@ describe('ReportsPage', () => {
         '3 deals won worth $12,000 in 2024 · 42 activities logged · 2 overdue tasks now',
       ),
     ).toBeInTheDocument()
-    expect(reports.getTeamPerformance).toHaveBeenCalledWith(2024)
+    expect(reports.getTeamPerformance).toHaveBeenCalledWith({ year: 2024 })
     const card = within(
       screen
         .getByText('Team performance', { selector: '[data-slot="card-title"]' })
@@ -419,7 +430,7 @@ describe('ReportsPage', () => {
   })
 
   it('says so when the team has no activity, and when the report fails', async () => {
-    vi.mocked(reports.getTeamPerformance).mockImplementation(async (y) => team(y, false))
+    vi.mocked(reports.getTeamPerformance).mockImplementation(async ({ year: y }) => team(y, false))
     renderReports()
     expect(await screen.findByText(`No team activity in ${YEAR}`)).toBeInTheDocument()
 
@@ -428,5 +439,84 @@ describe('ReportsPage', () => {
     expect(
       await screen.findByText('Could not load the team performance report'),
     ).toBeInTheDocument()
+  })
+
+  it('filters every report by date range, owner and pipeline, kept in the address', async () => {
+    renderReports(`/reports?year=2024`)
+    await screen.findByText('Deals won in 2024, by the month they closed')
+    await userEvent.type(screen.getByLabelText('From'), '2024-02-01')
+    await userEvent.type(screen.getByLabelText('To'), '2024-06-30')
+    await userEvent.selectOptions(await screen.findByLabelText('Owner'), 'u1')
+    await userEvent.selectOptions(screen.getByLabelText('Pipeline'), 'p2')
+    const all = {
+      year: 2024,
+      from: '2024-02-01',
+      to: '2024-06-30',
+      ownerId: 'u1',
+      pipelineId: 'p2',
+    }
+    await waitFor(() => expect(reports.getMonthlySales).toHaveBeenLastCalledWith(all))
+    for (const call of [
+      reports.getRevenueReport,
+      reports.getLeadConversion,
+      reports.getWinRate,
+      reports.getLostDeals,
+      reports.getTeamPerformance,
+    ]) {
+      expect(call).toHaveBeenLastCalledWith(all)
+    }
+    expect(reports.getFunnelReport).toHaveBeenLastCalledWith('p2', 'u1')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(reports.getMonthlySales).toHaveBeenLastCalledWith({ year: 2024 }))
+    expect(screen.getByLabelText('Owner')).toHaveValue('')
+  })
+
+  it('clears the dates when the year changes, and refuses a backwards range', async () => {
+    renderReports(`/reports?year=2024&from=2024-03-01&to=2024-02-01`)
+    expect(
+      await screen.findByText('The end date must be after the start date.'),
+    ).toBeInTheDocument()
+    expect(reports.getMonthlySales).not.toHaveBeenCalled()
+
+    await userEvent.selectOptions(screen.getByLabelText('Year'), String(YEAR))
+    expect(await screen.findByText(`Deals won in ${YEAR}, by the month they closed`)).toBeVisible()
+    expect(screen.getByLabelText('From')).toHaveValue('')
+    expect(reports.getMonthlySales).toHaveBeenCalledWith({ year: YEAR })
+  })
+
+  it('ignores dates outside the year in the address', async () => {
+    renderReports('/reports?year=2024&from=2023-05-01')
+    await screen.findByText('Deals won in 2024, by the month they closed')
+    expect(reports.getMonthlySales).toHaveBeenCalledWith({ year: 2024 })
+  })
+
+  it('exports each report as CSV with the filters used', async () => {
+    renderReports('/reports?year=2024&owner=u1&pipeline=p1')
+    await screen.findByText('Deals won in 2024, by the month they closed')
+    const card = within(
+      screen
+        .getByText('Team performance', { selector: '[data-slot="card-title"]' })
+        .closest('[data-slot="card"]')!,
+    )
+    await userEvent.click(await card.findByRole('button', { name: 'Export CSV' }))
+    expect(csv.downloadCsv).toHaveBeenCalledTimes(1)
+    const [filename, rows] = vi.mocked(csv.downloadCsv).mock.calls[0]
+    expect(filename).toBe('team-performance-2024.csv')
+    expect(rows[0]).toEqual(['Team performance'])
+    expect(rows[1]).toEqual(['Filters', '2024 · Owner: Sam Seller · Pipeline: Enterprise'])
+    expect(rows).toContainEqual(expect.arrayContaining(['Sam Seller', 'SALES', 3, 1, 75, 12000]))
+  })
+
+  it('cannot export a report that failed to load', async () => {
+    vi.mocked(reports.getWinRate).mockRejectedValue(new Error('boom'))
+    renderReports()
+    await screen.findByText('Could not load the win rate report')
+    const card = within(
+      screen
+        .getByText('Win rate', { selector: '[data-slot="card-title"]' })
+        .closest('[data-slot="card"]')!,
+    )
+    expect(card.getByRole('button', { name: 'Export CSV' })).toBeDisabled()
   })
 })

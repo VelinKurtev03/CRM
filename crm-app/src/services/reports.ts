@@ -1,5 +1,25 @@
 import { api } from '@/api/client'
 
+/** What every report can be narrowed by. Dates are YYYY-MM-DD and sit inside `year`. */
+export type ReportFilters = {
+  year: number
+  from?: string
+  to?: string
+  ownerId?: string
+  pipelineId?: string
+}
+
+/** Drops empty filters so they are not sent as blank query values. */
+const cleanFilters = (f: ReportFilters) =>
+  Object.fromEntries(Object.entries(f).filter(([, v]) => v !== undefined && v !== ''))
+
+export type FilterOptions = {
+  owners: { id: string; name: string }[]
+  pipelines: { id: string; name: string }[]
+}
+export const getFilterOptions = () =>
+  api.get<FilterOptions>('/reports/filter-options').then((r) => r.data)
+
 export type MonthlySalesRow = {
   month: string
   dealsWon: number
@@ -27,11 +47,13 @@ export type RevenueReport = {
 }
 
 /** Both need `reports:read`. */
-export const getMonthlySales = (year: number) =>
-  api.get<MonthlySales>('/reports/monthly-sales', { params: { year } }).then((r) => r.data)
+export const getMonthlySales = (filters: ReportFilters) =>
+  api
+    .get<MonthlySales>('/reports/monthly-sales', { params: cleanFilters(filters) })
+    .then((r) => r.data)
 
-export const getRevenueReport = (year: number) =>
-  api.get<RevenueReport>('/reports/revenue', { params: { year } }).then((r) => r.data)
+export const getRevenueReport = (filters: ReportFilters) =>
+  api.get<RevenueReport>('/reports/revenue', { params: cleanFilters(filters) }).then((r) => r.data)
 
 export type FunnelStage = {
   stageId: string
@@ -62,14 +84,16 @@ export type LeadConversionReport = {
 }
 
 /** Both need `reports:read`. Without a pipeline the default one is used. */
-export const getFunnelReport = (pipelineId?: string) =>
+export const getFunnelReport = (pipelineId?: string, ownerId?: string) =>
   api
-    .get<FunnelReport>('/reports/funnel', { params: pipelineId ? { pipelineId } : {} })
+    .get<FunnelReport>('/reports/funnel', {
+      params: { ...(pipelineId && { pipelineId }), ...(ownerId && { ownerId }) },
+    })
     .then((r) => r.data)
 
-export const getLeadConversion = (year: number) =>
+export const getLeadConversion = (filters: ReportFilters) =>
   api
-    .get<LeadConversionReport>('/reports/lead-conversion', { params: { year } })
+    .get<LeadConversionReport>('/reports/lead-conversion', { params: cleanFilters(filters) })
     .then((r) => r.data)
 
 export type WinRateRow = { won: number; lost: number; winRatePercent: number | null }
@@ -99,11 +123,13 @@ export type LostDealsReport = {
 }
 
 /** Both need `reports:read`. */
-export const getWinRate = (year: number) =>
-  api.get<WinRateReport>('/reports/win-rate', { params: { year } }).then((r) => r.data)
+export const getWinRate = (filters: ReportFilters) =>
+  api.get<WinRateReport>('/reports/win-rate', { params: cleanFilters(filters) }).then((r) => r.data)
 
-export const getLostDeals = (year: number) =>
-  api.get<LostDealsReport>('/reports/lost-deals', { params: { year } }).then((r) => r.data)
+export const getLostDeals = (filters: ReportFilters) =>
+  api
+    .get<LostDealsReport>('/reports/lost-deals', { params: cleanFilters(filters) })
+    .then((r) => r.data)
 
 export type TeamMember = {
   userId: string
@@ -140,7 +166,7 @@ export type TeamPerformanceReport = {
 }
 
 /** Needs `reports:read`. */
-export const getTeamPerformance = (year: number) =>
+export const getTeamPerformance = (filters: ReportFilters) =>
   api
-    .get<TeamPerformanceReport>('/reports/team-performance', { params: { year } })
+    .get<TeamPerformanceReport>('/reports/team-performance', { params: cleanFilters(filters) })
     .then((r) => r.data)

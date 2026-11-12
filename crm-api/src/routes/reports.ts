@@ -22,21 +22,91 @@ const yearQuery = z.object({
     .default(() => new Date().getFullYear()),
 })
 
-/** Won deals closed in `year` and the year before it, each with the month index it closed in. */
-async function wonDeals(year: number) {
+const day = z.iso.date('Enter a valid date (YYYY-MM-DD)')
+
+/**
+ * The filters every report takes: a year, optionally narrowed to a date range inside it, and an
+ * owner and a pipeline. Empty strings (a cleared filter) count as not set.
+ */
+const filterQuery = yearQuery
+  .extend({
+    from: z.preprocess((v) => v || undefined, day.optional()),
+    to: z.preprocess((v) => v || undefined, day.optional()),
+    ownerId: z.string().min(1).optional(),
+    pipelineId: z.string().min(1).optional(),
+  })
+  .superRefine((q, ctx) => {
+    for (const key of ['from', 'to'] as const) {
+      const value = q[key]
+      if (value && /^\d{4}-/.test(value) && Number(value.slice(0, 4)) !== q.year) {
+        ctx.addIssue({ code: 'custom', path: [key], message: `Choose a date in ${q.year}` })
+      }
+    }
+    if (q.from && q.to && q.from > q.to) {
+      ctx.addIssue({ code: 'custom', path: ['to'], message: 'End date must be after the start' })
+    }
+  })
+
+type Filters = {
+  year: number
+  /** Start (inclusive) and end (exclusive) of the period reported on. */
+  start: Date
+  end: Date
+  /** The same period a year earlier, for year-on-year comparison. */
+  prevStart: Date
+  prevEnd: Date
+  ownerId?: string
+  pipelineId?: string
+}
+
+const localDay = (iso: string, plusDays = 0) => {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y, m - 1, d + plusDays)
+}
+const yearsBefore = (date: Date, years: number) =>
+  new Date(date.getFullYear() - years, date.getMonth(), date.getDate())
+
+function parseFilters(query: unknown): Filters {
+  const q = parseQuery(filterQuery, query)
+  const start = q.from ? localDay(q.from) : new Date(q.year, 0, 1)
+  const end = q.to ? localDay(q.to, 1) : new Date(q.year + 1, 0, 1)
+  return {
+    year: q.year,
+    start,
+    end,
+    prevStart: yearsBefore(start, 1),
+    prevEnd: yearsBefore(end, 1),
+    ownerId: q.ownerId,
+    pipelineId: q.pipelineId,
+  }
+}
+
+const inRange = (f: Filters) => ({ gte: f.start, lt: f.end })
+
+/** Won deals closed in the period and in the same period a year earlier, with their month. */
+async function wonDeals(f: Filters) {
   const deals = await prisma.deal.findMany({
     where: {
       status: 'WON',
-      closedAt: { gte: new Date(year - 1, 0, 1), lt: new Date(year + 1, 0, 1) },
+      OR: [
+        { closedAt: { gte: f.start, lt: f.end } },
+        { closedAt: { gte: f.prevStart, lt: f.prevEnd } },
+      ],
+      ...(f.ownerId && { ownerId: f.ownerId }),
+      ...(f.pipelineId && { pipelineId: f.pipelineId }),
     },
     select: { amount: true, closedAt: true, pipelineId: true },
   })
-  return deals.map((d) => ({
+  const rows = deals.map((d) => ({
     amount: money(d.amount),
-    year: d.closedAt!.getFullYear(),
+    at: d.closedAt!,
     month: d.closedAt!.getMonth(),
     pipelineId: d.pipelineId,
   }))
+  return {
+    current: rows.filter((d) => d.at >= f.start && d.at < f.end),
+    previous: rows.filter((d) => d.at >= f.prevStart && d.at < f.prevEnd),
+  }
 }
 
 /**
@@ -48,8 +118,9 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
-    const won = (await wonDeals(year)).filter((d) => d.year === year)
+    const f = parseFilters(req.query)
+    const { year } = f
+    const won = (await wonDeals(f)).current
 
     const months = Array.from({ length: 12 }, (_, m) => {
       const inMonth = won.filter((d) => d.month === m)
@@ -83,11 +154,10 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
-    const all = await wonDeals(year)
-    const sum = (list: typeof all) => list.reduce((s, d) => s + d.amount, 0)
-    const current = all.filter((d) => d.year === year)
-    const previous = all.filter((d) => d.year === year - 1)
+    const f = parseFilters(req.query)
+    const { year } = f
+    const { current, previous } = await wonDeals(f)
+    const sum = (list: typeof current) => list.reduce((s, d) => s + d.amount, 0)
 
     let cumulative = 0
     const months = Array.from({ length: 12 }, (_, m) => {
@@ -133,6 +203,8 @@ reportsRouter.get(
 )
 
 const funnelQuery = z.object({
+  /** Only deals owned by this person. */
+  ownerId: z.string().min(1).optional(),
   /** Pipeline to report on; defaults to the default pipeline, else the first one. */
   pipelineId: z.string().min(1, 'Enter a valid pipeline').optional(),
 })
@@ -150,7 +222,7 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { pipelineId } = parseQuery(funnelQuery, req.query)
+    const { pipelineId, ownerId } = parseQuery(funnelQuery, req.query)
     const pipelines = await prisma.pipeline.findMany({
       select: { id: true, name: true, isDefault: true },
       orderBy: { name: 'asc' },
@@ -168,7 +240,7 @@ reportsRouter.get(
     const [stages, deals] = await Promise.all([
       prisma.stage.findMany({ where: { pipelineId: chosen.id }, orderBy: { position: 'asc' } }),
       prisma.deal.findMany({
-        where: { pipelineId: chosen.id },
+        where: { pipelineId: chosen.id, ...(ownerId && { ownerId }) },
         select: { amount: true, status: true, stageId: true },
       }),
     ])
@@ -224,9 +296,11 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
+    const f = parseFilters(req.query)
+    const { year } = f
     const leads = await prisma.lead.findMany({
-      where: { createdAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+      // Leads have no pipeline, so only the dates and the owner narrow them.
+      where: { createdAt: inRange(f), ...(f.ownerId && { ownerId: f.ownerId }) },
       select: { createdAt: true, source: true, status: true, dealId: true },
     })
     const converted = (l: (typeof leads)[number]) => l.dealId !== null
@@ -260,10 +334,15 @@ reportsRouter.get(
   },
 )
 
-/** Deals that closed (won or lost) in `year`, with the month they closed in. */
-async function closedDeals(year: number, status: 'WON' | 'LOST') {
+/** Deals that closed (won or lost) in the period, with the month they closed in. */
+async function closedDeals(f: Filters, status: 'WON' | 'LOST') {
   return prisma.deal.findMany({
-    where: { status, closedAt: { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) } },
+    where: {
+      status,
+      closedAt: inRange(f),
+      ...(f.ownerId && { ownerId: f.ownerId }),
+      ...(f.pipelineId && { pipelineId: f.pipelineId }),
+    },
     select: {
       id: true,
       title: true,
@@ -285,10 +364,11 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
+    const f = parseFilters(req.query)
+    const { year } = f
     const [won, lost, pipelines] = await Promise.all([
-      closedDeals(year, 'WON'),
-      closedDeals(year, 'LOST'),
+      closedDeals(f, 'WON'),
+      closedDeals(f, 'LOST'),
       prisma.pipeline.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     ])
     const row = (w: typeof won, l: typeof lost) => ({
@@ -328,9 +408,10 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
+    const f = parseFilters(req.query)
+    const { year } = f
     const [lost, pipelines] = await Promise.all([
-      closedDeals(year, 'LOST'),
+      closedDeals(f, 'LOST'),
       prisma.pipeline.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
     ])
     const value = (list: typeof lost) => list.reduce((s, d) => s + money(d.amount), 0)
@@ -389,20 +470,30 @@ reportsRouter.get(
   authenticate,
   requirePermission('reports:read'),
   async (req, res) => {
-    const { year } = parseQuery(yearQuery, req.query)
-    const range = { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) }
+    const f = parseFilters(req.query)
+    const { year } = f
+    const range = inRange(f)
     const now = new Date()
     const [users, closed, open, leads, activities, done, openTasks] = await Promise.all([
       prisma.user.findMany({
-        where: { isActive: true },
+        where: { isActive: true, ...(f.ownerId && { id: f.ownerId }) },
         select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } },
       }),
       prisma.deal.findMany({
-        where: { status: { in: ['WON', 'LOST'] }, closedAt: range, ownerId: { not: null } },
+        where: {
+          status: { in: ['WON', 'LOST'] },
+          closedAt: range,
+          ownerId: { not: null },
+          ...(f.pipelineId && { pipelineId: f.pipelineId }),
+        },
         select: { ownerId: true, status: true, amount: true },
       }),
       prisma.deal.findMany({
-        where: { status: 'OPEN', ownerId: { not: null } },
+        where: {
+          status: 'OPEN',
+          ownerId: { not: null },
+          ...(f.pipelineId && { pipelineId: f.pipelineId }),
+        },
         select: { ownerId: true, amount: true },
       }),
       prisma.lead.findMany({
@@ -470,6 +561,27 @@ reportsRouter.get(
         tasksCompleted: sum((m) => m.tasksCompleted),
         tasksOverdue: sum((m) => m.tasksOverdue),
       },
+    })
+  },
+)
+
+/** The people and pipelines that can be picked in the report filters. */
+reportsRouter.get(
+  '/reports/filter-options',
+  authenticate,
+  requirePermission('reports:read'),
+  async (_req, res) => {
+    const [users, pipelines] = await Promise.all([
+      prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, firstName: true, lastName: true },
+        orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }],
+      }),
+      prisma.pipeline.findMany({ select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+    ])
+    res.json({
+      owners: users.map((u) => ({ id: u.id, name: `${u.firstName} ${u.lastName}` })),
+      pipelines,
     })
   },
 )

@@ -11,6 +11,40 @@ const userContent = {
 } as const
 
 /** OpenAPI 3 description of the API. Add new paths here as endpoints are built. */
+const reportFilters = [
+  {
+    name: 'year',
+    in: 'query',
+    schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+    description: 'Calendar year (defaults to the current year)',
+  },
+  {
+    name: 'from',
+    in: 'query',
+    schema: { type: 'string', format: 'date' },
+    description: 'First day to include (YYYY-MM-DD, inside `year`; defaults to 1 January)',
+  },
+  {
+    name: 'to',
+    in: 'query',
+    schema: { type: 'string', format: 'date' },
+    description:
+      'Last day to include, inclusive (YYYY-MM-DD, inside `year`; defaults to 31 December)',
+  },
+  {
+    name: 'ownerId',
+    in: 'query',
+    schema: { type: 'string' },
+    description: 'Only deals, leads and so on owned by this user',
+  },
+  {
+    name: 'pipelineId',
+    in: 'query',
+    schema: { type: 'string' },
+    description: 'Only deals in this pipeline (leads have no pipeline and are not filtered)',
+  },
+]
+
 export const openapi = {
   openapi: '3.0.3',
   info: {
@@ -309,14 +343,7 @@ export const openapi = {
         description:
           'For each month of a year: deals won, their total value and the average deal size, plus year totals. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'Twelve monthly rows and totals',
@@ -343,14 +370,7 @@ export const openapi = {
         description:
           'Won revenue per month of a year with a running total and the same month a year earlier, the change against the previous year (`changePercent` is null when last year had no revenue) and revenue by pipeline. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'Twelve monthly rows, totals and a pipeline split',
@@ -386,6 +406,12 @@ export const openapi = {
             in: 'query',
             schema: { type: 'string' },
             description: 'Pipeline to report on (defaults to the default pipeline)',
+          },
+          {
+            name: 'ownerId',
+            in: 'query',
+            schema: { type: 'string' },
+            description: 'Only deals owned by this user',
           },
         ],
         responses: {
@@ -426,14 +452,7 @@ export const openapi = {
         description:
           'Of the leads created in a year: how many became deals, were lost or are still open, with the conversion rate (`conversionPercent` is null with no leads), by month created and by source. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'Totals, twelve monthly rows and a source split',
@@ -461,14 +480,7 @@ export const openapi = {
         description:
           'Of the deals that closed in a year, the share that were won (won ÷ won + lost), in total, by month and by pipeline. `winRatePercent` is null when nothing closed. Open deals are left out. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'Twelve monthly rows, totals and a pipeline split',
@@ -498,14 +510,7 @@ export const openapi = {
         description:
           'Deals lost in a year: count, value, average size and average days open, by month and pipeline, and the ten biggest with owner and days open. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'Totals, twelve monthly rows, a pipeline split and the biggest lost deals',
@@ -544,14 +549,7 @@ export const openapi = {
         description:
           'One row per active person for a year: deals won and lost, win rate, revenue, open deals and their value, leads owned and converted, activities logged, tasks completed, open and overdue. Open deals and tasks are a snapshot of today; completed tasks are those done and last updated in the year. People with nothing to show are left out. Sorted by revenue. Requires `reports:read` (Manager, Admin).',
         security: [{ bearerAuth: [] }],
-        parameters: [
-          {
-            name: 'year',
-            in: 'query',
-            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
-            description: 'Calendar year (defaults to the current year)',
-          },
-        ],
+        parameters: reportFilters,
         responses: {
           '200': {
             description: 'A row per team member and team totals',
@@ -592,6 +590,30 @@ export const openapi = {
             },
           },
           '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/filter-options': {
+      get: {
+        tags: ['Reports'],
+        summary: 'People and pipelines to filter reports by',
+        description:
+          'Active users and all pipelines, by name. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': {
+            description: 'Owners and pipelines',
+            content: {
+              'application/json': {
+                example: {
+                  owners: [{ id: 'clx…', name: 'Sam Seller' }],
+                  pipelines: [{ id: 'clx…', name: 'Sales' }],
+                },
+              },
+            },
+          },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
         },
