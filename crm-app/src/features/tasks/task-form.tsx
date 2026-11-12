@@ -15,11 +15,12 @@ import {
 } from '@/components/ui/form'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
-import { TASK_PRIORITIES, TASK_STATUSES } from '@/services/task-options'
+import { REMINDER_MINUTES, TASK_PRIORITIES, TASK_STATUSES } from '@/services/task-options'
 import { listAssignees } from '@/services/tasks'
 import {
   emptyTask,
   PRIORITY_LABELS,
+  REMINDER_LABELS,
   STATUS_LABELS,
   taskSchema,
   type TaskFormValues,
@@ -50,7 +51,8 @@ export function TaskForm<T>({
     onError: (error) => {
       const fields = getFieldErrors(error)
       for (const name of Object.keys(emptyTask()) as (keyof TaskFormValues)[]) {
-        if (fields[name]) form.setError(name, { message: fields[name] })
+        const message = fields[name] ?? (name === 'reminder' ? fields.reminderMinutes : undefined)
+        if (message) form.setError(name, { message })
       }
     },
   })
@@ -130,6 +132,10 @@ export function TaskForm<T>({
                 </FormItem>
               )}
             />
+            {choice('reminder', 'Reminder', [
+              { value: '', label: 'No reminder' },
+              ...REMINDER_MINUTES.map((m) => ({ value: String(m), label: REMINDER_LABELS[m] })),
+            ])}
             {choice(
               'priority',
               'Priority',

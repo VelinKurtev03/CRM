@@ -5,6 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { app } from '../app.js'
 import { syncPermissions } from '../lib/permissions.js'
 import { prisma } from '../lib/prisma.js'
+import { sendDueReminders } from '../lib/task-reminders.js'
 
 const stamp = Date.now()
 const password = 'Secret123!'
@@ -98,6 +99,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await prisma.notification.deleteMany({ where: { userId: { in: Object.values(ids) } } })
   await prisma.task.deleteMany({ where: { title: { startsWith: `tk-${stamp}` } } })
   await prisma.deal.deleteMany({ where: { id: dealId } })
   await prisma.pipeline.deleteMany({ where: { id: pipelineId } })
@@ -202,5 +204,82 @@ describe('GET /api/tasks/assignees', () => {
     const found = res.body.assignees.map((a: { id: string }) => a.id)
     expect(found).toContain(ids.colleague)
     expect(found).not.toContain(ids.inactive)
+  })
+})
+
+describe('task reminders', () => {
+  const HOUR = 3_600_000
+  const now = new Date()
+  const task = (name: string, data: object) =>
+    prisma.task.create({
+      data: { title: `tk-${stamp}-${name}`, creatorId: ids.sales, assigneeId: ids.sales, ...data },
+    })
+  const reminders = () =>
+    prisma.notification.findMany({ where: { userId: ids.sales, type: 'TASK_REMINDER' } })
+
+  it('saves a reminder with a due date', async () => {
+    const res = await create('sales', {
+      title: `tk-${stamp}-remind`,
+      dueDate: '2030-01-31',
+      reminderMinutes: 1440,
+    })
+    expect(res.status).toBe(201)
+    expect(res.body.task.reminderMinutes).toBe(1440)
+  })
+
+  it('has no reminder unless asked for', async () => {
+    const res = await create('sales', { title: `tk-${stamp}-none`, dueDate: '2030-01-31' })
+    expect(res.body.task.reminderMinutes).toBeNull()
+  })
+
+  it('rejects a reminder without a due date, or at an unsupported time', async () => {
+    const noDate = await create('sales', { title: `tk-${stamp}-x`, reminderMinutes: 60 })
+    expect(noDate.status).toBe(400)
+    expect(noDate.body.error.details.reminderMinutes).toBe('Set a due date to get a reminder')
+    const odd = await create('sales', {
+      title: `tk-${stamp}-x`,
+      dueDate: '2030-01-31',
+      reminderMinutes: 7,
+    })
+    expect(odd.status).toBe(400)
+    expect(odd.body.error.details.reminderMinutes).toBe('Choose a reminder time')
+  })
+
+  it('notifies the assignee once, when the reminder time has come', async () => {
+    await task('due-soon', { dueDate: new Date(now.getTime() + 30 * 60_000), reminderMinutes: 60 })
+    await sendDueReminders(now)
+    await sendDueReminders(now)
+    const found = (await reminders()).filter((n) => n.message.includes(`tk-${stamp}-due-soon`))
+    expect(found).toHaveLength(1)
+    expect(found[0]!.readAt).toBeNull()
+  })
+
+  it('waits until the reminder time, then sends it', async () => {
+    const dueDate = new Date(now.getTime() + 5 * HOUR)
+    await task('later', { dueDate, reminderMinutes: 60 })
+    const has = async () => (await reminders()).some((n) => n.message.includes(`tk-${stamp}-later`))
+    await sendDueReminders(now)
+    expect(await has()).toBe(false)
+    await sendDueReminders(new Date(dueDate.getTime() - 59 * 60_000))
+    expect(await has()).toBe(true)
+  })
+
+  it('skips finished tasks, unassigned tasks and tasks without a reminder', async () => {
+    const dueDate = new Date(now.getTime() + 10 * 60_000)
+    await task('done', { dueDate, reminderMinutes: 60, status: 'DONE' })
+    await task('unassigned', { dueDate, reminderMinutes: 60, assigneeId: null })
+    await task('no-reminder', { dueDate })
+    await sendDueReminders(now)
+    const skipped = (await reminders()).filter((n) =>
+      /tk-\d+-(done|unassigned|no-reminder)/.test(n.message),
+    )
+    expect(skipped).toHaveLength(0)
+  })
+
+  it('shows reminders in the assignee’s dashboard notifications', async () => {
+    const res = await request(app).get('/api/dashboard/attention').set(as('sales'))
+    expect(
+      res.body.notifications.items.some((n: { type: string }) => n.type === 'TASK_REMINDER'),
+    ).toBe(true)
   })
 })

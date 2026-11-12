@@ -28,6 +28,7 @@ const created: tasks.Task = {
   status: 'TODO',
   priority: 'MEDIUM',
   dueDate: null,
+  reminderMinutes: null,
   assignee: { id: '1', firstName: 'Ann', lastName: 'Lee' },
 }
 
@@ -79,6 +80,7 @@ describe('New task', () => {
     await screen.findByRole('option', { name: 'Bob Ray' })
     await userEvent.selectOptions(screen.getByLabelText('Assignee'), '2')
     await userEvent.type(screen.getByLabelText(/Due date/), '2027-01-31')
+    await userEvent.selectOptions(screen.getByLabelText('Reminder'), '60')
     await userEvent.selectOptions(screen.getByLabelText('Priority'), 'HIGH')
     await userEvent.selectOptions(screen.getByLabelText('Status'), 'IN_PROGRESS')
     await userEvent.type(screen.getByLabelText(/Description/), 'Include the discount')
@@ -90,6 +92,7 @@ describe('New task', () => {
         description: 'Include the discount',
         assigneeId: '2',
         dueDate: '2027-01-31',
+        reminderMinutes: 60,
         priority: 'HIGH',
         status: 'IN_PROGRESS',
       }),
@@ -109,6 +112,31 @@ describe('New task', () => {
         status: 'TODO',
       }),
     )
+  })
+
+  it('reminds one day before the due date by default', async () => {
+    vi.mocked(tasks.createTask).mockResolvedValue(created)
+    renderAt('/tasks/new')
+    expect(screen.getByLabelText('Reminder')).toHaveDisplayValue('1 day before')
+    await userEvent.type(screen.getByLabelText('Title'), 'Call back')
+    await userEvent.type(screen.getByLabelText(/Due date/), '2027-01-31')
+    await userEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    await waitFor(() =>
+      expect(tasks.createTask).toHaveBeenCalledWith(
+        expect.objectContaining({ dueDate: '2027-01-31', reminderMinutes: 1440 }),
+      ),
+    )
+  })
+
+  it('sends no reminder when none is chosen', async () => {
+    vi.mocked(tasks.createTask).mockResolvedValue(created)
+    renderAt('/tasks/new')
+    await userEvent.type(screen.getByLabelText('Title'), 'Call back')
+    await userEvent.type(screen.getByLabelText(/Due date/), '2027-01-31')
+    await userEvent.selectOptions(screen.getByLabelText('Reminder'), '')
+    await userEvent.click(screen.getByRole('button', { name: 'Create task' }))
+    await waitFor(() => expect(tasks.createTask).toHaveBeenCalled())
+    expect(vi.mocked(tasks.createTask).mock.calls[0]![0]).not.toHaveProperty('reminderMinutes')
   })
 
   it('asks for a title before saving', async () => {

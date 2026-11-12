@@ -298,6 +298,10 @@ model Task {
   status      TaskStatus   @default(TODO)
   priority    TaskPriority @default(MEDIUM)
   dueDate     DateTime?
+  /// Minutes before `dueDate` to remind the assignee; null means no reminder.
+  reminderMinutes Int?
+  /// Set once the reminder has been sent, so it is only sent once.
+  remindedAt  DateTime?
   assigneeId  String?
   assignee    User?      @relation("TaskAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
   creatorId   String
@@ -310,6 +314,7 @@ model Task {
   updatedAt   DateTime   @updatedAt
 
   @@index([assigneeId, status])
+  @@index([remindedAt, dueDate])
 }
 
 model CalendarEvent {

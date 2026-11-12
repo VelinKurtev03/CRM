@@ -1,6 +1,7 @@
 import { z } from 'zod'
 
 import {
+  REMINDER_MINUTES,
   TASK_PRIORITIES,
   TASK_STATUSES,
   type TaskPriority,
@@ -20,6 +21,13 @@ export const PRIORITY_LABELS: Record<TaskPriority, string> = {
   HIGH: 'High',
 }
 
+export const REMINDER_LABELS: Record<(typeof REMINDER_MINUTES)[number], string> = {
+  15: '15 minutes before',
+  60: '1 hour before',
+  1440: '1 day before',
+  10080: '1 week before',
+}
+
 const isRealDate = (v: string) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(v)) return false
   const d = new Date(`${v}T00:00:00Z`)
@@ -35,6 +43,8 @@ export const taskSchema = z.object({
     .string()
     .trim()
     .refine((v) => v === '' || isRealDate(v), 'Enter a valid date'),
+  /** Minutes before the due date as text, or empty for no reminder; ignored without a due date. */
+  reminder: z.string(),
   priority: z.enum(TASK_PRIORITIES),
   status: z.enum(TASK_STATUSES),
 })
@@ -45,6 +55,7 @@ export const emptyTask = (): TaskFormValues => ({
   description: '',
   assigneeId: '',
   dueDate: '',
+  reminder: '1440',
   priority: 'MEDIUM',
   status: 'TODO',
 })
@@ -54,6 +65,10 @@ export function toNewTask(v: TaskFormValues): NewTask {
   const body: NewTask = { title: v.title.trim(), priority: v.priority, status: v.status }
   if (v.description.trim()) body.description = v.description.trim()
   if (v.assigneeId) body.assigneeId = v.assigneeId
-  if (v.dueDate.trim()) body.dueDate = v.dueDate.trim()
+  if (v.dueDate.trim()) {
+    body.dueDate = v.dueDate.trim()
+    const minutes = REMINDER_MINUTES.find((m) => String(m) === v.reminder)
+    if (minutes) body.reminderMinutes = minutes
+  }
   return body
 }

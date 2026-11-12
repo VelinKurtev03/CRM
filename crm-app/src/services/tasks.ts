@@ -1,5 +1,5 @@
 import { api } from '@/api/client'
-import type { TaskPriority, TaskStatus } from './task-options'
+import type { ReminderMinutes, TaskPriority, TaskStatus } from './task-options'
 
 export type Assignee = { id: string; firstName: string; lastName: string }
 
@@ -10,6 +10,8 @@ export type NewTask = {
   priority?: TaskPriority
   /** A calendar date, `YYYY-MM-DD`; the task is due at the end of that day. */
   dueDate?: string
+  /** Notify the assignee this long before the due date; needs `dueDate`. */
+  reminderMinutes?: ReminderMinutes
   assigneeId?: string
   contactId?: string
   dealId?: string
@@ -22,6 +24,7 @@ export type Task = {
   status: TaskStatus
   priority: TaskPriority
   dueDate: string | null
+  reminderMinutes: ReminderMinutes | null
   assignee: Assignee | null
 }
 

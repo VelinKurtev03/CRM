@@ -1487,7 +1487,7 @@ export const openapi = {
         tags: ['Tasks'],
         summary: 'Create task',
         description:
-          'Requires `tasks:write`. Status defaults to `TODO`, priority to `MEDIUM`, and the assignee to you. The assignee must be an active user. A date-only `dueDate` runs to the end of that day (UTC). `contactId` and `dealId` link the task to a record you can read (`contacts:read`, `deals:read`).',
+          'Requires `tasks:write`. Status defaults to `TODO`, priority to `MEDIUM`, and the assignee to you. The assignee must be an active user. A date-only `dueDate` runs to the end of that day (UTC). `reminderMinutes` (15, 60, 1440 or 10080) notifies the assignee that long before the due date, once, and needs a `dueDate`; none is sent for a finished task. `contactId` and `dealId` link the task to a record you can read (`contacts:read`, `deals:read`).',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1502,6 +1502,7 @@ export const openapi = {
                   status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
                   priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
                   dueDate: { type: 'string', format: 'date' },
+                  reminderMinutes: { type: 'integer', enum: [15, 60, 1440, 10080] },
                   assigneeId: { type: 'string' },
                   contactId: { type: 'string' },
                   dealId: { type: 'string' },

@@ -2,6 +2,7 @@ import { Router } from 'express'
 import { z } from 'zod'
 
 import { HttpError } from '../lib/http-error.js'
+import { REMINDER_MINUTES } from '../lib/task-reminders.js'
 import { prisma } from '../lib/prisma.js'
 import { getPermissions, requirePermission } from '../middleware/authorize.js'
 import { validateBody } from '../middleware/validate.js'
@@ -25,11 +26,24 @@ const createTaskSchema = z.object({
   status: z.enum(TASK_STATUSES).default('TODO'),
   priority: z.enum(TASK_PRIORITIES).default('MEDIUM'),
   dueDate: z.iso.date('Enter a valid date').optional(),
+  /** Minutes before the due date to remind the assignee; needs a due date. */
+  reminderMinutes: z
+    .number()
+    .refine((v) => (REMINDER_MINUTES as readonly number[]).includes(v), 'Choose a reminder time')
+    .optional(),
   /** Defaults to the person creating the task. */
   assigneeId: z.string().min(1).optional(),
   contactId: z.string().min(1).optional(),
   dealId: z.string().min(1).optional(),
 })
+
+const createTaskChecked = createTaskSchema.refine(
+  (v) => v.reminderMinutes === undefined || v.dueDate,
+  {
+    message: 'Set a due date to get a reminder',
+    path: ['reminderMinutes'],
+  },
+)
 
 const taskSelect = {
   id: true,
@@ -38,6 +52,7 @@ const taskSelect = {
   status: true,
   priority: true,
   dueDate: true,
+  reminderMinutes: true,
   assigneeId: true,
   creatorId: true,
   contactId: true,
@@ -59,7 +74,7 @@ tasksRouter.get('/tasks/assignees', requirePermission('tasks:write'), async (_re
 tasksRouter.post(
   '/tasks',
   requirePermission('tasks:write'),
-  validateBody(createTaskSchema),
+  validateBody(createTaskChecked),
   async (req, res) => {
     const userId = req.auth!.userId
     const {

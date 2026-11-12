@@ -113,7 +113,7 @@ wiki's Activities page. Activities are shown as a timeline grouped by day (Today
 
 **Add task** on the dashboard opens the New task page (`/tasks/new`): a title, who it is assigned to (you by
 default, or any active user), an optional due date, a priority (Low, Medium or High) and a status (To do, In
-progress or Done). Anyone with `tasks:write` can create tasks. A task list comes with later stories. See the
+progress or Done), and a reminder (1 day before the due date by default; or 15 minutes, 1 hour, 1 week, or none). The API checks once a minute and sends the assignee one notification, shown on the dashboard, when the reminder time comes. Anyone with `tasks:write` can create tasks. A task list comes with later stories. See the
 wiki's Tasks page.
 
 ## Companies
