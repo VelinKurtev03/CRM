@@ -116,6 +116,13 @@ default, or any active user), an optional due date, a priority (Low, Medium or H
 progress or Done), and a reminder (1 day before the due date by default; or 15 minutes, 1 hour, 1 week, or none). The API checks once a minute and sends the assignee one notification, shown on the dashboard, when the reminder time comes. Anyone with `tasks:write` can create tasks. The **Tasks** page (`/tasks`, needs `tasks:read`) lists tasks soonest due first and filters them by assignee (anyone, me, unassigned or a person), status and priority; the filters are kept in the address. See the
 wiki's Tasks page.
 
+## Calendar
+
+**Calendar** in the sidebar (`/calendar`) has Day, Week (the default, Monday to Sunday) and Month views of your own
+calls and meetings (logged activities), tasks assigned to you by due date, and open deals you own by expected close.
+Step with the arrows, **Today** jumps to now, and a day opens in the Day view. The view and date are in the address.
+Available to everyone signed in; a source you can't read is left out. See the wiki's Calendar page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

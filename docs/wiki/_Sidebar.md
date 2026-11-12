@@ -10,6 +10,7 @@
 - [[Notes]]
 - [[Activities]]
 - [[Tasks]]
+- [[Calendar]]
 - [[Dashboard]]
 - [[Roles and Permissions]]
 

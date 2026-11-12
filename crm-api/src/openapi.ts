@@ -26,6 +26,10 @@ export const openapi = {
     { name: 'Dashboard' },
     { name: 'Records' },
     { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
+    {
+      name: 'Calendar',
+      description: 'Your calls, meetings, task due dates and deal deadlines by day.',
+    },
     { name: 'Pipelines', description: 'Deal pipelines and their stages (admins change them).' },
   ],
   paths: {
@@ -1479,6 +1483,25 @@ export const openapi = {
           '403': { $ref: '#/components/responses/Forbidden' },
           '404': { description: 'Stage not found' },
           '409': { description: 'Deals need moving, or the pipeline would be left unusable' },
+        },
+      },
+    },
+    '/calendar': {
+      get: {
+        tags: ['Calendar'],
+        summary: 'Calendar items',
+        description:
+          "The caller's own calendar from `from` to `to` (inclusive calendar dates, at most 62 days): calls and meetings they logged (`activities:read`), tasks assigned to them by due date (`tasks:read`) and open deals they own by expected close (`deals:read`). A source the caller cannot read is left out. Tasks and deals are `allDay`. `offset` is the viewer's `Date.getTimezoneOffset()`, used to place timed items on their days. Returns `{ items }` in time order, each `{ id, kind (CALL, MEETING, TASK, DEAL), title, at, allDay }`.",
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'to', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
+          { name: 'offset', in: 'query', schema: { type: 'integer', default: 0 } },
+        ],
+        responses: {
+          '200': { description: 'OK' },
+          '400': { description: 'Missing or invalid dates, or more than 62 days' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
         },
       },
     },

@@ -18,6 +18,7 @@ import { ContactDetailPage } from '@/features/contacts/contact-detail-page'
 import { ImportContactsPage } from '@/features/contacts/import-contacts-page'
 import { EditContactPage } from '@/features/contacts/edit-contact-page'
 import { NewContactPage } from '@/features/contacts/new-contact-page'
+import { CalendarPage } from '@/features/calendar/calendar-page'
 import { TasksPage } from '@/features/tasks/tasks-page'
 import { NewTaskPage } from '@/features/tasks/new-task-page'
 import { TagsPage } from '@/features/tags/tags-page'
@@ -141,6 +142,7 @@ export const routes = [
               },
             ],
           },
+          { path: '/calendar', element: <CalendarPage />, handle: { crumb: 'Calendar' } },
           {
             element: <RequirePermission permission="tasks:read" />,
             children: [{ path: '/tasks', element: <TasksPage />, handle: { crumb: 'Tasks' } }],

@@ -24,6 +24,7 @@ import { leadsRouter } from './routes/leads.js'
 import { activitiesRouter } from './routes/activities.js'
 import { notesRouter } from './routes/notes.js'
 import { tasksRouter } from './routes/tasks.js'
+import { calendarRouter } from './routes/calendar.js'
 import { dashboardRouter } from './routes/dashboard.js'
 import { usersRouter } from './routes/users.js'
 import { healthRouter } from './routes/health.js'
@@ -77,6 +78,7 @@ app.use('/api', tagsRouter)
 app.use('/api', notesRouter)
 app.use('/api', activitiesRouter)
 app.use('/api', tasksRouter)
+app.use('/api', calendarRouter)
 
 app.get('/api/openapi.json', (_req, res) => {
   res.json(openapi)
