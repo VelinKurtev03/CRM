@@ -109,6 +109,13 @@ Log a call, meeting, email, SMS or note against a contact (on the contact page) 
 page): a type, a subject, optional details and when it happened (now by default, never in the future). See the
 wiki's Activities page. Activities are shown as a timeline grouped by day (Today, Yesterday, then the date).
 
+## Tasks
+
+**Add task** on the dashboard opens the New task page (`/tasks/new`): a title, who it is assigned to (you by
+default, or any active user), an optional due date, a priority (Low, Medium or High) and a status (To do, In
+progress or Done). Anyone with `tasks:write` can create tasks. A task list comes with later stories. See the
+wiki's Tasks page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

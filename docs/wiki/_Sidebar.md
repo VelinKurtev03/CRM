@@ -9,6 +9,7 @@
 - [[Pipelines]]
 - [[Notes]]
 - [[Activities]]
+- [[Tasks]]
 - [[Dashboard]]
 - [[Roles and Permissions]]
 

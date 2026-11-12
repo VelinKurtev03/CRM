@@ -88,7 +88,12 @@ Swagger UI at **http://localhost:4000/api/docs**; the raw spec is at `/api/opena
 
 The contact list and export take `tag` repeated for several tags (`?tag=a&tag=b`) and `tagMode=any|all`.
 
-Quick-create (used by the dashboard's quick actions): `POST /leads`, `POST /deals`, `POST /tasks`, each taking only
-the essentials. Deals start in the first stage of the default pipeline.
+Quick-create (used by the dashboard's quick actions): `POST /leads` and `POST /deals`, each taking only the
+essentials. Deals start in the first stage of the default pipeline.
+
+| Endpoint | Needs | What it does |
+| --- | --- | --- |
+| `POST /tasks` | `tasks:write` | Create a task: `title`, optional `description`, `status` (default `TODO`), `priority` (default `MEDIUM`), `dueDate` (`YYYY-MM-DD`, due at the end of that day), `assigneeId` (default you; must be active), `contactId`, `dealId` |
+| `GET /tasks/assignees` | `tasks:write` | Active users a task can be assigned to |
 
 More detail on contacts: [[Contacts]].

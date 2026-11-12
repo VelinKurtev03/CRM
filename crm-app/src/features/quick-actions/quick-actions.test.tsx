@@ -39,7 +39,7 @@ beforeEach(() => vi.resetAllMocks())
 describe('QuickActions', () => {
   it('shows a button only for records the role may create', () => {
     setup(['tasks:write'])
-    expect(screen.getByRole('button', { name: 'Add task' })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: 'Add task' })).toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Add contact' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Add deal' })).not.toBeInTheDocument()
   })

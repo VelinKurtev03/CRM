@@ -39,7 +39,6 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
-  await prisma.task.deleteMany({ where: { title: { startsWith: `qc-${stamp}` } } })
   await prisma.deal.deleteMany({ where: { title: { startsWith: `qc-${stamp}` } } })
   await prisma.lead.deleteMany({ where: { title: { startsWith: `qc-${stamp}` } } })
   await prisma.user.deleteMany({ where: { email: { in: Object.values(emails) } } })
@@ -48,7 +47,7 @@ afterAll(async () => {
 
 describe('quick-create endpoints', () => {
   it('require login', async () => {
-    for (const path of ['contacts', 'leads', 'deals', 'tasks']) {
+    for (const path of ['contacts', 'leads', 'deals']) {
       expect((await request(app).post(`/api/${path}`).send({})).status).toBe(401)
     }
   })
@@ -58,9 +57,6 @@ describe('quick-create endpoints', () => {
     expect(res.status).toBe(400)
     expect(res.body.error.details).toMatchObject({ title: 'Title is required' })
     expect((await post('sales', '/api/deals', { title: 'x', amount: -5 })).status).toBe(400)
-    expect((await post('sales', '/api/tasks', { title: 'x', dueDate: '31/12/2026' })).status).toBe(
-      400,
-    )
   })
 
   it('creates a lead as NEW, owned by me', async () => {
@@ -90,23 +86,8 @@ describe('quick-create endpoints', () => {
     expect(stage.id).toBe(first.id)
   })
 
-  it('creates a task assigned to me, due at the end of the day', async () => {
-    const res = await post('sales', '/api/tasks', {
-      title: `qc-${stamp}-task`,
-      dueDate: '2027-01-31',
-    })
-    expect(res.status).toBe(201)
-    expect(res.body.task).toMatchObject({
-      status: 'TODO',
-      assigneeId: ids.sales,
-      creatorId: ids.sales,
-      dueDate: '2027-01-31T23:59:59.999Z',
-    })
-  })
-
-  it('follows role permissions: support can add tasks but not leads or deals', async () => {
+  it('follows role permissions: support cannot add leads or deals', async () => {
     expect((await post('support', '/api/leads', { title: 'a' })).status).toBe(403)
     expect((await post('support', '/api/deals', { title: 'a' })).status).toBe(403)
-    expect((await post('support', '/api/tasks', { title: `qc-${stamp}-support` })).status).toBe(201)
   })
 })

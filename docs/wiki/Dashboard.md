@@ -15,7 +15,8 @@ The first page after signing in. Every card hides itself if your role can't read
 ## Quick actions
 
 Buttons at the top create records in one click, each shown only if your role may create that record: **Add contact**
-(opens the full contact form), and small dialogs for **Add lead**, **Add deal** and **Add task**.
+(opens the full contact form), **Add task** (opens the full task form, see [[Tasks]]), and small dialogs for **Add lead**
+and **Add deal**.
 
 ## Things to know
 

@@ -23,7 +23,7 @@ import { pipelinesRouter } from './routes/pipelines.js'
 import { leadsRouter } from './routes/leads.js'
 import { activitiesRouter } from './routes/activities.js'
 import { notesRouter } from './routes/notes.js'
-import { quickCreateRouter } from './routes/quick-create.js'
+import { tasksRouter } from './routes/tasks.js'
 import { dashboardRouter } from './routes/dashboard.js'
 import { usersRouter } from './routes/users.js'
 import { healthRouter } from './routes/health.js'
@@ -76,7 +76,7 @@ app.use('/api', leadAttachmentsRouter)
 app.use('/api', tagsRouter)
 app.use('/api', notesRouter)
 app.use('/api', activitiesRouter)
-app.use('/api', quickCreateRouter)
+app.use('/api', tasksRouter)
 
 app.get('/api/openapi.json', (_req, res) => {
   res.json(openapi)

@@ -25,6 +25,7 @@ export const openapi = {
     { name: 'Users' },
     { name: 'Dashboard' },
     { name: 'Records' },
+    { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
     { name: 'Pipelines', description: 'Deal pipelines and their stages (admins change them).' },
   ],
   paths: {
@@ -1483,10 +1484,10 @@ export const openapi = {
     },
     '/tasks': {
       post: {
-        tags: ['Records'],
+        tags: ['Tasks'],
         summary: 'Create task',
         description:
-          'Quick-create with the essential fields only. Requires `tasks:write`. The task is assigned to you; due dates run to the end of that day.',
+          'Requires `tasks:write`. Status defaults to `TODO`, priority to `MEDIUM`, and the assignee to you. The assignee must be an active user. A date-only `dueDate` runs to the end of that day (UTC). `contactId` and `dealId` link the task to a record you can read (`contacts:read`, `deals:read`).',
         security: [{ bearerAuth: [] }],
         requestBody: {
           required: true,
@@ -1496,16 +1497,36 @@ export const openapi = {
                 type: 'object',
                 required: ['title'],
                 properties: {
-                  title: { type: 'string' },
+                  title: { type: 'string', maxLength: 200 },
+                  description: { type: 'string', maxLength: 5000 },
+                  status: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+                  priority: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
                   dueDate: { type: 'string', format: 'date' },
+                  assigneeId: { type: 'string' },
+                  contactId: { type: 'string' },
+                  dealId: { type: 'string' },
                 },
               },
             },
           },
         },
         responses: {
-          '201': { description: 'Created' },
-          '400': { description: 'Validation failed' },
+          '201': { description: 'Created. Returns `task`, with its `assignee`.' },
+          '400': { description: 'Validation failed, or the assignee is not an active user' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'Contact or deal not found' },
+        },
+      },
+    },
+    '/tasks/assignees': {
+      get: {
+        tags: ['Tasks'],
+        summary: 'List people a task can be assigned to',
+        description: 'Requires `tasks:write`. Active users, by name: `{ assignees }`.',
+        security: [{ bearerAuth: [] }],
+        responses: {
+          '200': { description: 'OK' },
           '401': { $ref: '#/components/responses/Unauthorized' },
           '403': { $ref: '#/components/responses/Forbidden' },
         },

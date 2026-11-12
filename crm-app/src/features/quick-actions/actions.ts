@@ -18,11 +18,11 @@ type ActionBase = {
 }
 
 /** Opens a page. */
-export type LinkAction = ActionBase & { type: 'contact'; to: string }
+export type LinkAction = ActionBase & { type: 'contact' | 'task'; to: string }
 
 /** Opens a small create dialog. */
 export type DialogAction = ActionBase & {
-  type: Exclude<QuickRecord, 'contact'>
+  type: Exclude<QuickRecord, 'contact' | 'task'>
   fields: Field[]
   schema: z.ZodType<Record<string, string>, Record<string, string>>
   /** Turn the form's strings into the API body: empty fields are left out. */
@@ -85,11 +85,7 @@ export const QUICK_ACTIONS: QuickAction[] = [
     label: 'Add task',
     permission: 'tasks:write',
     icon: ListPlus,
-    fields: [
-      { name: 'title', label: 'Title' },
-      { name: 'dueDate', label: 'Due date (optional)', type: 'date' },
-    ],
-    schema: z.object({ title: required('Title'), dueDate: optional }),
-    toBody: (v) => compact(v),
+    /** Tasks have a full form page (assignee, priority, status) rather than a quick dialog. */
+    to: '/tasks/new',
   },
 ]

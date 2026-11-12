@@ -1,12 +1,11 @@
 import { api } from '@/api/client'
 
 export type QuickRecord = 'contact' | 'lead' | 'deal' | 'task'
-type DialogRecord = Exclude<QuickRecord, 'contact'>
+type DialogRecord = Exclude<QuickRecord, 'contact' | 'task'>
 
 const paths: Record<DialogRecord, string> = {
   lead: '/leads',
   deal: '/deals',
-  task: '/tasks',
 }
 
 /** Quick-create: sends only the essential fields for each record type. */
