@@ -21,6 +21,20 @@ After saving you return to the dashboard, where your open tasks are listed soone
 The API can also link a task to a contact or a deal (`contactId`, `dealId`); a linked contact's tasks appear on the
 contact's page. The form does not offer this yet.
 
+## The task list
+
+**Tasks** in the sidebar (`/tasks`) lists every task, soonest due first, with tasks that have no due date last.
+Each row shows the title, assignee, due date, priority and status. Narrow it with three filters, which combine:
+
+| Filter | Choices |
+| --- | --- |
+| Assignee | Anyone (default), **Me**, Unassigned, or any active user |
+| Status | Any, To do, In progress, Done |
+| Priority | Any, Low, Medium, High |
+
+**Clear** removes the filters. They live in the address (`/tasks?assignee=me&status=TODO`), so a filtered list can
+be bookmarked or shared. Twenty tasks are shown per page. Editing tasks from the list comes with a later story.
+
 ## Reminders
 
 When a task has a due date and a reminder, the API checks once a minute and sends the assignee one notification
@@ -32,10 +46,10 @@ have no assignee get none. Reminders are in the app only; there is no email yet.
 
 | Action | Needs |
 | --- | --- |
-| Create a task, and see who it can be assigned to | `tasks:write` (Sales, Support, Manager, Admin) |
+| See the task list and the people to filter by | `tasks:read` (Sales, Support, Manager, Admin) |
+| Create a task | `tasks:write` (Sales, Support, Manager, Admin) |
 | Link a task to a contact or deal | also `contacts:read` or `deals:read` |
 
-Anyone who can create tasks can assign them to any active user. Editing, listing and filtering are
-later stories.
+Anyone who can create tasks can assign them to any active user. Editing tasks is a later story.
 
 Endpoints are in the [[API Reference]].

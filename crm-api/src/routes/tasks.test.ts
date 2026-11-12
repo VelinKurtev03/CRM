@@ -207,6 +207,90 @@ describe('GET /api/tasks/assignees', () => {
   })
 })
 
+describe('GET /api/tasks', () => {
+  const get = (who: Who, query = '') => request(app).get(`/api/tasks?${query}`).set(as(who))
+  const titles = (res: request.Response) => res.body.tasks.map((t: { title: string }) => t.title)
+
+  beforeAll(async () => {
+    const mk = (suffix: string, data: object) =>
+      prisma.task.create({
+        data: { title: `tk-${stamp}-list-${suffix}`, creatorId: ids.sales, ...data },
+      })
+    await mk('a', {
+      assigneeId: ids.sales,
+      status: 'TODO',
+      priority: 'HIGH',
+      dueDate: new Date('2030-02-01'),
+    })
+    await mk('b', { assigneeId: ids.sales, status: 'DONE', priority: 'LOW' })
+    await mk('c', {
+      assigneeId: ids.colleague,
+      status: 'TODO',
+      priority: 'LOW',
+      dueDate: new Date('2030-01-01'),
+    })
+    await mk('d', { assigneeId: null, status: 'IN_PROGRESS', priority: 'HIGH' })
+  })
+
+  const listed = async (query: string) =>
+    titles(await get('sales', query)).filter((t: string) => t.startsWith(`tk-${stamp}-list-`))
+
+  it('requires login', async () => {
+    expect((await request(app).get('/api/tasks')).status).toBe(401)
+  })
+
+  it('forbids people without tasks:read', async () => {
+    expect((await get('limited')).status).toBe(403)
+    expect((await get('none')).status).toBe(403)
+  })
+
+  it('lists soonest due first, with no due date last', async () => {
+    const res = await get('sales', 'pageSize=100')
+    expect(res.status).toBe(200)
+    expect(res.body.total).toBeGreaterThanOrEqual(4)
+    expect(res.body.tasks[0].assignee === null || 'firstName' in res.body.tasks[0].assignee).toBe(
+      true,
+    )
+    const order = (await listed('pageSize=100')).map((t: string) => t.slice(-1))
+    expect(order.slice(0, 2)).toEqual(['c', 'a'])
+  })
+
+  it('filters by assignee: a person, me, or nobody', async () => {
+    expect((await listed(`assignee=${ids.colleague}&pageSize=100`)).sort()).toEqual([
+      `tk-${stamp}-list-c`,
+    ])
+    expect((await listed('assignee=me&pageSize=100')).sort()).toEqual([
+      `tk-${stamp}-list-a`,
+      `tk-${stamp}-list-b`,
+    ])
+    expect(await listed('assignee=none&pageSize=100')).toEqual([`tk-${stamp}-list-d`])
+  })
+
+  it('filters by status and priority, and the filters combine', async () => {
+    expect(await listed('status=IN_PROGRESS&pageSize=100')).toEqual([`tk-${stamp}-list-d`])
+    expect((await listed('priority=HIGH&pageSize=100')).sort()).toEqual([
+      `tk-${stamp}-list-a`,
+      `tk-${stamp}-list-d`,
+    ])
+    expect(await listed(`assignee=me&status=TODO&priority=HIGH&pageSize=100`)).toEqual([
+      `tk-${stamp}-list-a`,
+    ])
+  })
+
+  it('pages the results', async () => {
+    const res = await get('sales', `assignee=${ids.sales}&pageSize=1&page=2`)
+    expect(res.body.tasks).toHaveLength(1)
+    expect(res.body.page).toBe(2)
+    expect(res.body.total).toBeGreaterThanOrEqual(2)
+  })
+
+  it('rejects an unknown status, priority or page', async () => {
+    expect((await get('sales', 'status=NOPE')).status).toBe(400)
+    expect((await get('sales', 'priority=NOPE')).status).toBe(400)
+    expect((await get('sales', 'page=0')).status).toBe(400)
+  })
+})
+
 describe('task reminders', () => {
   const HOUR = 3_600_000
   const now = new Date()

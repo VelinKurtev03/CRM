@@ -164,3 +164,87 @@ describe('New task', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Server exploded')
   })
 })
+
+describe('Tasks list', () => {
+  const page = (list: tasks.Task[], total = list.length): tasks.TasksPage => ({
+    tasks: list,
+    total,
+    page: 1,
+    pageSize: 20,
+  })
+  const both = ['tasks:read', 'tasks:write']
+  const call = () => vi.mocked(tasks.listTasks).mock.calls.at(-1)![0]
+
+  it('is for roles with tasks:read', () => {
+    renderAt('/tasks', [])
+    expect(screen.getByText('Access denied')).toBeInTheDocument()
+  })
+
+  it('shows each task with its assignee, due date, priority and status', async () => {
+    vi.mocked(tasks.listTasks).mockResolvedValue(
+      page([{ ...created, dueDate: '2027-01-31T23:59:59.999Z', priority: 'HIGH' }]),
+    )
+    renderAt('/tasks', ['tasks:read'])
+    const row = (await screen.findByText('Send the quote')).closest('tr')!
+    expect(row).toHaveTextContent('Ann Lee')
+    expect(row).toHaveTextContent('Jan 31, 2027')
+    expect(row).toHaveTextContent('High')
+    expect(row).toHaveTextContent('To do')
+    expect(screen.getByText('1 task')).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /New task/ })).not.toBeInTheDocument()
+  })
+
+  it('filters by assignee, status and priority, and clears them', async () => {
+    vi.mocked(tasks.listTasks).mockResolvedValue(page([created]))
+    renderAt('/tasks', both)
+    await screen.findByText('Send the quote')
+    expect(call()).toMatchObject({ assignee: undefined, status: undefined, priority: undefined })
+
+    await screen.findByRole('option', { name: 'Bob Ray' })
+    await userEvent.selectOptions(screen.getByLabelText('Assignee'), '2')
+    await waitFor(() => expect(call()).toMatchObject({ assignee: '2' }))
+    await userEvent.selectOptions(screen.getByLabelText('Status'), 'DONE')
+    await waitFor(() => expect(call()).toMatchObject({ assignee: '2', status: 'DONE' }))
+    await userEvent.selectOptions(screen.getByLabelText('Priority'), 'HIGH')
+    await waitFor(() =>
+      expect(call()).toMatchObject({ assignee: '2', status: 'DONE', priority: 'HIGH' }),
+    )
+    expect(await screen.findByText(/match your filters/)).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Clear' }))
+    await waitFor(() =>
+      expect(call()).toMatchObject({ assignee: undefined, status: undefined, priority: undefined }),
+    )
+  })
+
+  it('can show just my tasks or the unassigned ones', async () => {
+    vi.mocked(tasks.listTasks).mockResolvedValue(page([created]))
+    renderAt('/tasks', both)
+    await screen.findByText('Send the quote')
+    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'me')
+    await waitFor(() => expect(call()).toMatchObject({ assignee: 'me' }))
+    await userEvent.selectOptions(screen.getByLabelText('Assignee'), 'none')
+    await waitFor(() => expect(call()).toMatchObject({ assignee: 'none' }))
+  })
+
+  it('starts from the filters in the address', async () => {
+    vi.mocked(tasks.listTasks).mockResolvedValue(page([]))
+    renderAt('/tasks?status=TODO&priority=LOW', both)
+    expect(await screen.findByText('No tasks match')).toBeInTheDocument()
+    expect(screen.getByLabelText('Status')).toHaveDisplayValue('To do')
+    expect(screen.getByLabelText('Priority')).toHaveDisplayValue('Low')
+  })
+
+  it('offers to add the first task to people who can', async () => {
+    vi.mocked(tasks.listTasks).mockResolvedValue(page([]))
+    renderAt('/tasks', both)
+    expect(await screen.findByText('No tasks yet')).toBeInTheDocument()
+    expect(screen.getAllByRole('link', { name: /New task/ }).length).toBeGreaterThan(0)
+  })
+
+  it('says so when the list cannot be loaded', async () => {
+    vi.mocked(tasks.listTasks).mockRejectedValue(apiError(500, 'Boom'))
+    renderAt('/tasks', both)
+    expect(await screen.findByRole('alert')).toHaveTextContent('Boom')
+  })
+})

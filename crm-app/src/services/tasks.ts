@@ -33,3 +33,14 @@ export const createTask = (body: NewTask) =>
 
 export const listAssignees = () =>
   api.get<{ assignees: Assignee[] }>('/tasks/assignees').then((r) => r.data.assignees)
+
+export type TasksPage = { tasks: Task[]; total: number; page: number; pageSize: number }
+
+export const listTasks = (params: {
+  /** A user id, `me`, or `none` for unassigned tasks. */
+  assignee?: string
+  status?: string
+  priority?: string
+  page?: number
+  pageSize?: number
+}) => api.get<TasksPage>('/tasks', { params }).then((r) => r.data)

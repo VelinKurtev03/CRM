@@ -1483,6 +1483,38 @@ export const openapi = {
       },
     },
     '/tasks': {
+      get: {
+        tags: ['Tasks'],
+        summary: 'List tasks',
+        description:
+          'Requires `tasks:read`. Soonest due first, tasks without a due date last. Filters combine: `assignee` (a user id, `me` or `none`), `status` and `priority`. Returns `{ tasks, total, page, pageSize }`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          { name: 'assignee', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['TODO', 'IN_PROGRESS', 'DONE'] },
+          },
+          {
+            name: 'priority',
+            in: 'query',
+            schema: { type: 'string', enum: ['LOW', 'MEDIUM', 'HIGH'] },
+          },
+          { name: 'page', in: 'query', schema: { type: 'integer', minimum: 1, default: 1 } },
+          {
+            name: 'pageSize',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 100, default: 20 },
+          },
+        ],
+        responses: {
+          '200': { description: 'OK' },
+          '400': { description: 'Invalid filter' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
       post: {
         tags: ['Tasks'],
         summary: 'Create task',
@@ -1524,7 +1556,7 @@ export const openapi = {
       get: {
         tags: ['Tasks'],
         summary: 'List people a task can be assigned to',
-        description: 'Requires `tasks:write`. Active users, by name: `{ assignees }`.',
+        description: 'Requires `tasks:read`. Active users, by name: `{ assignees }`.',
         security: [{ bearerAuth: [] }],
         responses: {
           '200': { description: 'OK' },

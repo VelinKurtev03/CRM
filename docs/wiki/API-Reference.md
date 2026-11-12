@@ -93,7 +93,8 @@ essentials. Deals start in the first stage of the default pipeline.
 
 | Endpoint | Needs | What it does |
 | --- | --- | --- |
+| `GET /tasks` | `tasks:read` | Tasks, soonest due first (no due date last), `{ tasks, total, page, pageSize }`. Filters: `assignee` (user id, `me` or `none`), `status`, `priority`, `page`, `pageSize` (default 20, max 100) |
 | `POST /tasks` | `tasks:write` | Create a task: `title`, optional `description`, `status` (default `TODO`), `priority` (default `MEDIUM`), `dueDate` (`YYYY-MM-DD`, due at the end of that day), `reminderMinutes` (15, 60, 1440 or 10080; needs a `dueDate`), `assigneeId` (default you; must be active), `contactId`, `dealId` |
-| `GET /tasks/assignees` | `tasks:write` | Active users a task can be assigned to |
+| `GET /tasks/assignees` | `tasks:read` | Active users a task can be assigned to |
 
 More detail on contacts: [[Contacts]].

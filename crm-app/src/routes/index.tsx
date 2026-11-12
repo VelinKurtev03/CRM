@@ -18,6 +18,7 @@ import { ContactDetailPage } from '@/features/contacts/contact-detail-page'
 import { ImportContactsPage } from '@/features/contacts/import-contacts-page'
 import { EditContactPage } from '@/features/contacts/edit-contact-page'
 import { NewContactPage } from '@/features/contacts/new-contact-page'
+import { TasksPage } from '@/features/tasks/tasks-page'
 import { NewTaskPage } from '@/features/tasks/new-task-page'
 import { TagsPage } from '@/features/tags/tags-page'
 import { PipelinesPage } from '@/features/admin/pipelines/pipelines-page'
@@ -139,6 +140,10 @@ export const routes = [
                 ],
               },
             ],
+          },
+          {
+            element: <RequirePermission permission="tasks:read" />,
+            children: [{ path: '/tasks', element: <TasksPage />, handle: { crumb: 'Tasks' } }],
           },
           {
             element: <RequirePermission permission="tasks:write" />,

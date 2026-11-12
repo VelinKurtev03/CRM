@@ -5,7 +5,7 @@ import { HttpError } from '../lib/http-error.js'
 import { REMINDER_MINUTES } from '../lib/task-reminders.js'
 import { prisma } from '../lib/prisma.js'
 import { getPermissions, requirePermission } from '../middleware/authorize.js'
-import { validateBody } from '../middleware/validate.js'
+import { parseQuery, validateBody } from '../middleware/validate.js'
 
 export const tasksRouter = Router()
 
@@ -61,8 +61,40 @@ const taskSelect = {
   assignee: { select: { id: true, firstName: true, lastName: true } },
 } as const
 
-/** Active users a task can be given to, for the assignee choice on the form. */
-tasksRouter.get('/tasks/assignees', requirePermission('tasks:write'), async (_req, res) => {
+const listQuery = z.object({
+  /** A user id, `me` for the caller, or `none` for tasks nobody has. */
+  assignee: z.string().trim().min(1).optional(),
+  status: z.enum(TASK_STATUSES).optional(),
+  priority: z.enum(TASK_PRIORITIES).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  pageSize: z.coerce.number().int().min(1).max(100).default(20),
+})
+
+/** Tasks, soonest due first (no due date last), filtered by assignee, status and priority. */
+tasksRouter.get('/tasks', requirePermission('tasks:read'), async (req, res) => {
+  const { assignee, status, priority, page, pageSize } = parseQuery(listQuery, req.query)
+  const where = {
+    ...(assignee
+      ? { assigneeId: assignee === 'me' ? req.auth!.userId : assignee === 'none' ? null : assignee }
+      : {}),
+    ...(status ? { status } : {}),
+    ...(priority ? { priority } : {}),
+  }
+  const [total, tasks] = await Promise.all([
+    prisma.task.count({ where }),
+    prisma.task.findMany({
+      where,
+      orderBy: [{ dueDate: { sort: 'asc', nulls: 'last' } }, { createdAt: 'desc' }, { id: 'asc' }],
+      skip: (page - 1) * pageSize,
+      take: pageSize,
+      select: taskSelect,
+    }),
+  ])
+  res.json({ tasks, total, page, pageSize })
+})
+
+/** Active users, for the assignee choice on the form and the list's filter. */
+tasksRouter.get('/tasks/assignees', requirePermission('tasks:read'), async (_req, res) => {
   const assignees = await prisma.user.findMany({
     where: { isActive: true },
     orderBy: [{ firstName: 'asc' }, { lastName: 'asc' }, { id: 'asc' }],
