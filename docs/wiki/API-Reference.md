@@ -46,6 +46,7 @@ Swagger UI at **http://localhost:4000/api/docs**; the raw spec is at `/api/opena
 | `GET /reports/lead-conversion?year=` | `reports:read` | Leads created in a year: converted, lost, open, rate, by month and by source |
 | `GET /reports/win-rate?year=` | `reports:read` | Won vs lost deals closed in a year, win rate by month and pipeline |
 | `GET /reports/lost-deals?year=` | `reports:read` | Deals lost in a year: totals, by month and pipeline, ten biggest |
+| `GET /reports/team-performance?year=` | `reports:read` | One row per person: deals won and lost, win rate, revenue, open deals, leads, activities, tasks; team totals |
 
 ## Contacts and related
 

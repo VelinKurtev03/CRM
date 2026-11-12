@@ -20,6 +20,7 @@ import {
   getLostDeals,
   getMonthlySales,
   getRevenueReport,
+  getTeamPerformance,
   getWinRate,
 } from '@/services/reports'
 
@@ -683,6 +684,138 @@ function LostDealsCard({ year }: { year: number }) {
   )
 }
 
+function TeamPerformanceCard({ year }: { year: number }) {
+  const { data, isPending, isError } = useQuery({
+    queryKey: ['report-team-performance', year],
+    queryFn: () => getTeamPerformance(year),
+  })
+  const max = data ? Math.max(...data.members.map((m) => m.revenue)) : 0
+  const rate = (p: number | null) => (p === null ? '—' : `${Math.round(p)}%`)
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Team performance</CardTitle>
+        <CardDescription>
+          {data && data.members.length > 0
+            ? `${data.totals.dealsWon} deals won worth ${formatMoney(data.totals.revenue)} in ${year} · ${data.totals.activities} activities logged · ${data.totals.tasksOverdue} overdue tasks now`
+            : `How each person did in ${year}`}
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        {isError && <Failed what="the team performance report" />}
+        {isPending && <Loading label="Loading team performance" />}
+        {data && data.members.length === 0 && (
+          <EmptyState
+            title={`No team activity in ${year}`}
+            description="Deals, leads, calls and tasks owned by your team will appear here."
+          />
+        )}
+        {data && data.members.length > 0 && (
+          <>
+            <div>
+              <h3 className="mb-2 text-sm font-medium">Deals closed in {year}</h3>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Person</TableHead>
+                    <TableHead className="text-right">Won</TableHead>
+                    <TableHead className="text-right">Lost</TableHead>
+                    <TableHead className="text-right">Win rate</TableHead>
+                    <TableHead className="text-right">Revenue</TableHead>
+                    <TableHead className="w-1/5">
+                      <span className="sr-only">Share of the top seller</span>
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.members.map((m) => (
+                    <TableRow key={m.userId}>
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.dealsWon}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.dealsLost}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {rate(m.winRatePercent)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(m.revenue)}
+                      </TableCell>
+                      <TableCell>
+                        <Bar value={m.revenue} max={max} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+                <TableFooter>
+                  <TableRow>
+                    <TableCell>Team</TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {data.totals.dealsWon}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {data.totals.dealsLost}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {rate(data.totals.winRatePercent)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums">
+                      {formatMoney(data.totals.revenue)}
+                    </TableCell>
+                    <TableCell />
+                  </TableRow>
+                </TableFooter>
+              </Table>
+            </div>
+
+            <div>
+              <h3 className="mb-2 text-sm font-medium">Pipeline and workload</h3>
+              <p className="mb-2 text-xs text-muted-foreground">
+                Open deals and tasks are as of today. Leads and activities are for {year}.
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Person</TableHead>
+                    <TableHead className="text-right">Open deals</TableHead>
+                    <TableHead className="text-right">Open value</TableHead>
+                    <TableHead className="text-right">Leads</TableHead>
+                    <TableHead className="text-right">Converted</TableHead>
+                    <TableHead className="text-right">Activities</TableHead>
+                    <TableHead className="text-right">Tasks done</TableHead>
+                    <TableHead className="text-right">Open tasks</TableHead>
+                    <TableHead className="text-right">Overdue</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.members.map((m) => (
+                    <TableRow key={m.userId}>
+                      <TableCell>{m.name}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.openDeals}</TableCell>
+                      <TableCell className="text-right tabular-nums">
+                        {formatMoney(m.openValue)}
+                      </TableCell>
+                      <TableCell className="text-right tabular-nums">{m.leads}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.leadsConverted}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.activities}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.tasksCompleted}</TableCell>
+                      <TableCell className="text-right tabular-nums">{m.tasksOpen}</TableCell>
+                      <TableCell
+                        className={`text-right tabular-nums ${m.tasksOverdue > 0 ? 'font-medium text-destructive' : ''}`}
+                      >
+                        {m.tasksOverdue}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
+  )
+}
+
 export function ReportsPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const thisYear = new Date().getFullYear()
@@ -698,7 +831,8 @@ export function ReportsPage() {
         <div>
           <h1 className="text-2xl font-semibold">Sales reports</h1>
           <p className="text-sm text-muted-foreground">
-            How the team is performing: sales, funnel, lead conversion, win rate and lost deals.
+            How the team is performing: sales, funnel, lead conversion, win rate, lost deals and
+            each person's results.
           </p>
         </div>
         <select
@@ -730,6 +864,7 @@ export function ReportsPage() {
       <LeadConversionCard year={year} />
       <WinRateCard year={year} />
       <LostDealsCard year={year} />
+      <TeamPerformanceCard year={year} />
     </div>
   )
 }

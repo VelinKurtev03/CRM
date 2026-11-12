@@ -27,7 +27,7 @@ export const openapi = {
     {
       name: 'Reports',
       description:
-        'Sales, revenue, funnel, lead conversion, win rate and lost deals reports for managers.',
+        'Sales, revenue, funnel, lead conversion, win rate, lost deals and team performance reports for managers.',
     },
     { name: 'Records' },
     { name: 'Tasks', description: 'Follow-ups with an assignee, due date, priority and status.' },
@@ -527,6 +527,66 @@ export const openapi = {
                       daysOpen: 21,
                     },
                   ],
+                },
+              },
+            },
+          },
+          '400': { $ref: '#/components/responses/ValidationError' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+        },
+      },
+    },
+    '/reports/team-performance': {
+      get: {
+        tags: ['Reports'],
+        summary: 'Team performance report',
+        description:
+          'One row per active person for a year: deals won and lost, win rate, revenue, open deals and their value, leads owned and converted, activities logged, tasks completed, open and overdue. Open deals and tasks are a snapshot of today; completed tasks are those done and last updated in the year. People with nothing to show are left out. Sorted by revenue. Requires `reports:read` (Manager, Admin).',
+        security: [{ bearerAuth: [] }],
+        parameters: [
+          {
+            name: 'year',
+            in: 'query',
+            schema: { type: 'integer', minimum: 2000, maximum: 2100 },
+            description: 'Calendar year (defaults to the current year)',
+          },
+        ],
+        responses: {
+          '200': {
+            description: 'A row per team member and team totals',
+            content: {
+              'application/json': {
+                example: {
+                  year: 2026,
+                  members: [
+                    {
+                      userId: 'clx…',
+                      name: 'Sam Seller',
+                      role: 'SALES',
+                      dealsWon: 3,
+                      dealsLost: 1,
+                      winRatePercent: 75,
+                      revenue: 12000,
+                      openDeals: 4,
+                      openValue: 30000,
+                      leads: 10,
+                      leadsConverted: 3,
+                      activities: 42,
+                      tasksCompleted: 15,
+                      tasksOpen: 5,
+                      tasksOverdue: 1,
+                    },
+                  ],
+                  totals: {
+                    dealsWon: 3,
+                    dealsLost: 1,
+                    winRatePercent: 75,
+                    revenue: 12000,
+                    activities: 42,
+                    tasksCompleted: 15,
+                    tasksOverdue: 1,
+                  },
                 },
               },
             },

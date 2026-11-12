@@ -164,6 +164,52 @@ const lostDeals = (year: number, any = true): reports.LostDealsReport => ({
     : [],
 })
 
+const member = (over: Partial<reports.TeamMember> = {}): reports.TeamMember => ({
+  userId: 'u1',
+  name: 'Sam Seller',
+  role: 'SALES',
+  dealsWon: 3,
+  dealsLost: 1,
+  winRatePercent: 75,
+  revenue: 12000,
+  openDeals: 4,
+  openValue: 30000,
+  leads: 10,
+  leadsConverted: 3,
+  activities: 42,
+  tasksCompleted: 15,
+  tasksOpen: 5,
+  tasksOverdue: 2,
+  ...over,
+})
+
+const team = (year: number, any = true): reports.TeamPerformanceReport => ({
+  year,
+  members: any
+    ? [
+        member(),
+        member({
+          userId: 'u2',
+          name: 'Nora Newbie',
+          dealsWon: 0,
+          dealsLost: 0,
+          winRatePercent: null,
+          revenue: 0,
+          tasksOverdue: 0,
+        }),
+      ]
+    : [],
+  totals: {
+    dealsWon: any ? 3 : 0,
+    dealsLost: any ? 1 : 0,
+    winRatePercent: any ? 75 : null,
+    revenue: any ? 12000 : 0,
+    activities: any ? 42 : 0,
+    tasksCompleted: any ? 15 : 0,
+    tasksOverdue: any ? 2 : 0,
+  },
+})
+
 function renderReports(entry = '/reports', permissions = manager.permissions) {
   useAuthStore.setState({ token: 'jwt', user: { ...manager, permissions }, initialized: true })
   const router = createMemoryRouter(routes, { initialEntries: [entry] })
@@ -185,6 +231,7 @@ beforeEach(() => {
   vi.mocked(reports.getLeadConversion).mockImplementation(async (y) => conversion(y))
   vi.mocked(reports.getWinRate).mockImplementation(async (y) => winRate(y))
   vi.mocked(reports.getLostDeals).mockImplementation(async (y) => lostDeals(y))
+  vi.mocked(reports.getTeamPerformance).mockImplementation(async (y) => team(y))
 })
 
 describe('ReportsPage', () => {
@@ -349,5 +396,37 @@ describe('ReportsPage', () => {
     renderReports()
     expect(await screen.findByText(`No closed deals in ${YEAR}`)).toBeInTheDocument()
     expect(await screen.findByText('Could not load the lost deals report')).toBeInTheDocument()
+  })
+
+  it('shows how each person is doing, with workload and overdue tasks', async () => {
+    renderReports('/reports?year=2024')
+    expect(
+      await screen.findByText(
+        '3 deals won worth $12,000 in 2024 · 42 activities logged · 2 overdue tasks now',
+      ),
+    ).toBeInTheDocument()
+    expect(reports.getTeamPerformance).toHaveBeenCalledWith(2024)
+    const card = within(
+      screen
+        .getByText('Team performance', { selector: '[data-slot="card-title"]' })
+        .closest('[data-slot="card"]')!,
+    )
+    expect(card.getByRole('row', { name: /Sam Seller 3 1 75% \$12,000/ })).toBeInTheDocument()
+    expect(card.getByRole('row', { name: /Nora Newbie 0 0 — \$0/ })).toBeInTheDocument()
+    expect(
+      card.getByRole('row', { name: /Sam Seller 4 \$30,000 10 3 42 15 5 2/ }),
+    ).toBeInTheDocument()
+  })
+
+  it('says so when the team has no activity, and when the report fails', async () => {
+    vi.mocked(reports.getTeamPerformance).mockImplementation(async (y) => team(y, false))
+    renderReports()
+    expect(await screen.findByText(`No team activity in ${YEAR}`)).toBeInTheDocument()
+
+    vi.mocked(reports.getTeamPerformance).mockRejectedValue(new Error('boom'))
+    renderReports('/reports?year=2023')
+    expect(
+      await screen.findByText('Could not load the team performance report'),
+    ).toBeInTheDocument()
   })
 })

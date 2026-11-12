@@ -50,6 +50,14 @@ Deals with status **Lost**, in the month they closed: the number and value lost 
 days a lost deal had been open (created to closed), and the **ten biggest** with pipeline, owner (or Unassigned) and days
 open. The CRM does not record a reason for losing a deal, so there is no breakdown by reason.
 
+## Team performance
+
+One row per active person, highest revenue first, with team totals. For the year: deals **won** and **lost** (by the month
+they closed), the win rate (blank if they closed nothing), revenue from won deals, leads they own that were created in the
+year and how many became deals, and activities they logged. As of **today**: open deals and their value, open tasks and
+how many are overdue. Tasks do not record when they were finished, so "tasks done" counts done tasks last updated in the
+year. People with nothing to show are left out, and deals with no owner are not attributed to anyone.
+
 ## How it is counted
 
 - Monthly sales and Revenue count only deals with status **Won**, in the month of their **closed** date. Open and lost deals never appear.
@@ -68,5 +76,7 @@ open. The CRM does not record a reason for losing a deal, so there is no breakdo
 
 | `GET /reports/win-rate?year=` | `reports:read` | Monthly `won`, `lost`, `winRatePercent`, totals and `byPipeline` |
 | `GET /reports/lost-deals?year=` | `reports:read` | Totals (count, value, average, average days open), `months`, `byPipeline` and the ten `biggest` |
+
+| `GET /reports/team-performance?year=` | `reports:read` | `members` (one row per person, by revenue) and team `totals` |
 
 `year` is 2000 to 2100 and defaults to the current year; anything else is a 400.

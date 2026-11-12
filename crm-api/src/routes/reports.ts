@@ -376,3 +376,100 @@ reportsRouter.get(
     })
   },
 )
+
+/**
+ * Team Performance: one row per person for a year, so a manager can see who is closing, who is
+ * working their pipeline and who is falling behind. Deals count in the month they closed, leads
+ * and activities by the date they were created or logged. Open deals and tasks are today's
+ * snapshot, not the year's. Tasks have no completion date, so "completed" counts done tasks last
+ * updated in the year. People with nothing to show are left out.
+ */
+reportsRouter.get(
+  '/reports/team-performance',
+  authenticate,
+  requirePermission('reports:read'),
+  async (req, res) => {
+    const { year } = parseQuery(yearQuery, req.query)
+    const range = { gte: new Date(year, 0, 1), lt: new Date(year + 1, 0, 1) }
+    const now = new Date()
+    const [users, closed, open, leads, activities, done, openTasks] = await Promise.all([
+      prisma.user.findMany({
+        where: { isActive: true },
+        select: { id: true, firstName: true, lastName: true, role: { select: { name: true } } },
+      }),
+      prisma.deal.findMany({
+        where: { status: { in: ['WON', 'LOST'] }, closedAt: range, ownerId: { not: null } },
+        select: { ownerId: true, status: true, amount: true },
+      }),
+      prisma.deal.findMany({
+        where: { status: 'OPEN', ownerId: { not: null } },
+        select: { ownerId: true, amount: true },
+      }),
+      prisma.lead.findMany({
+        where: { createdAt: range, ownerId: { not: null } },
+        select: { ownerId: true, dealId: true },
+      }),
+      prisma.activity.groupBy({ by: ['userId'], where: { occurredAt: range }, _count: true }),
+      prisma.task.groupBy({
+        by: ['assigneeId'],
+        where: { status: 'DONE', updatedAt: range, assigneeId: { not: null } },
+        _count: true,
+      }),
+      prisma.task.findMany({
+        where: { status: { not: 'DONE' }, assigneeId: { not: null } },
+        select: { assigneeId: true, dueDate: true },
+      }),
+    ])
+
+    const members = users
+      .map((u) => {
+        const won = closed.filter((d) => d.ownerId === u.id && d.status === 'WON')
+        const lost = closed.filter((d) => d.ownerId === u.id && d.status === 'LOST').length
+        const mineOpen = open.filter((d) => d.ownerId === u.id)
+        const myLeads = leads.filter((l) => l.ownerId === u.id)
+        const mine = openTasks.filter((t) => t.assigneeId === u.id)
+        return {
+          userId: u.id,
+          name: `${u.firstName} ${u.lastName}`,
+          role: u.role.name,
+          dealsWon: won.length,
+          dealsLost: lost,
+          // Null when nothing closed, so "no data" is not shown as 0%.
+          winRatePercent: percent(won.length, won.length + lost),
+          revenue: won.reduce((s, d) => s + money(d.amount), 0),
+          openDeals: mineOpen.length,
+          openValue: mineOpen.reduce((s, d) => s + money(d.amount), 0),
+          leads: myLeads.length,
+          leadsConverted: myLeads.filter((l) => l.dealId !== null).length,
+          activities: activities.find((a) => a.userId === u.id)?._count ?? 0,
+          tasksCompleted: done.find((t) => t.assigneeId === u.id)?._count ?? 0,
+          tasksOpen: mine.length,
+          tasksOverdue: mine.filter((t) => t.dueDate !== null && t.dueDate < now).length,
+        }
+      })
+      .filter(
+        (m) =>
+          m.dealsWon + m.dealsLost + m.openDeals + m.leads + m.activities + m.tasksCompleted > 0 ||
+          m.tasksOpen > 0,
+      )
+      .sort((a, b) => b.revenue - a.revenue || a.name.localeCompare(b.name))
+
+    const sum = (pick: (m: (typeof members)[number]) => number) =>
+      members.reduce((s, m) => s + pick(m), 0)
+    const dealsWon = sum((m) => m.dealsWon)
+    const dealsLost = sum((m) => m.dealsLost)
+    res.json({
+      year,
+      members,
+      totals: {
+        dealsWon,
+        dealsLost,
+        winRatePercent: percent(dealsWon, dealsWon + dealsLost),
+        revenue: sum((m) => m.revenue),
+        activities: sum((m) => m.activities),
+        tasksCompleted: sum((m) => m.tasksCompleted),
+        tasksOverdue: sum((m) => m.tasksOverdue),
+      },
+    })
+  },
+)

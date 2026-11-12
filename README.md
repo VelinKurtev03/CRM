@@ -153,6 +153,14 @@ with owner and days open. Deals count in the month they closed. The CRM does not
 no reason breakdown. The API is `GET /api/reports/win-rate` and `GET /api/reports/lost-deals` (both take `?year=`).
 See the wiki's Reports page.
 
+## Team performance
+
+The last report on **Reports** has one row per person for the chosen year: deals won and lost, win rate and revenue
+(highest first, with team totals), then open deals and their value, leads owned and converted, activities logged, and
+tasks done, open and overdue. Deals count in the month they closed; open deals and tasks are as of today. Tasks have no
+completion date, so "done" counts done tasks last updated in the year. People with nothing to show are left out. The
+API is `GET /api/reports/team-performance` (`?year=`), needing `reports:read`. See the wiki's Reports page.
+
 ## Companies
 
 **Companies** in the sidebar lists organizations (search by name or industry). Sales users and above can add and

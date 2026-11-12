@@ -20,6 +20,7 @@ let funnelPipelineId = ''
 // Years no other test file writes deals in, so totals can be asserted exactly.
 const YEAR = 2003
 const LEAD_YEAR = 2004
+const TEAM_YEAR = 2005
 
 const get = (path: string, who: keyof typeof tokens, query = '') =>
   request(app).get(`/api/reports/${path}${query}`).set('Authorization', `Bearer ${tokens[who]}`)
@@ -142,9 +143,68 @@ beforeAll(async () => {
       { ...lead('Web', 0, 'NEW'), createdAt: new Date(LEAD_YEAR - 1, 11, 31) }, // other year
     ],
   })
+
+  // Team performance: Sam (sales) has a full year, Mia (manager) only an overdue task.
+  const [sam, mia] = await prisma.user.findMany({
+    where: { email: { in: [emails.sales, emails.manager] } },
+    orderBy: { email: 'desc' },
+  })
+  const own = (amount: number, status: 'OPEN' | 'WON' | 'LOST', closedAt: Date | null) => ({
+    ...deal(a, amount, status, closedAt),
+    ownerId: sam.id,
+  })
+  await prisma.deal.createMany({
+    data: [
+      own(1000, 'WON', new Date(TEAM_YEAR, 1, 1)),
+      own(2000, 'WON', new Date(TEAM_YEAR, 5, 1)),
+      own(500, 'LOST', new Date(TEAM_YEAR, 6, 1)),
+      own(700, 'OPEN', null),
+      own(4000, 'WON', new Date(TEAM_YEAR - 1, 5, 1)), // other year
+    ],
+  })
+  await prisma.lead.createMany({
+    data: [
+      { title: `rep-${stamp}`, ownerId: sam.id, createdAt: new Date(TEAM_YEAR, 0, 5) },
+      { title: `rep-${stamp}`, ownerId: sam.id, createdAt: new Date(TEAM_YEAR, 0, 6) },
+    ],
+  })
+  const call = (occurredAt: Date) => ({
+    type: 'CALL' as const,
+    subject: `rep-${stamp}`,
+    userId: sam.id,
+    occurredAt,
+  })
+  await prisma.activity.createMany({
+    data: [
+      call(new Date(TEAM_YEAR, 2, 1)),
+      call(new Date(TEAM_YEAR, 3, 1)),
+      call(new Date(2001, 0, 1)),
+    ],
+  })
+  const task = (assigneeId: string, status: 'TODO' | 'DONE', dueDate: Date | null) => ({
+    title: `rep-${stamp}`,
+    creatorId: sam.id,
+    assigneeId,
+    status,
+    dueDate,
+  })
+  await prisma.task.createMany({
+    data: [
+      task(sam.id, 'DONE', null),
+      task(sam.id, 'TODO', new Date(2999, 0, 1)),
+      task(mia.id, 'TODO', new Date(2000, 0, 1)),
+    ],
+  })
+  // `updatedAt` is set by Prisma on create, so move the completed task into the year.
+  await prisma.task.updateMany({
+    where: { title: `rep-${stamp}`, status: 'DONE' },
+    data: { updatedAt: new Date(TEAM_YEAR, 4, 1) },
+  })
 })
 
 afterAll(async () => {
+  await prisma.task.deleteMany({ where: { title: `rep-${stamp}` } })
+  await prisma.activity.deleteMany({ where: { subject: `rep-${stamp}` } })
   await prisma.lead.deleteMany({ where: { title: `rep-${stamp}` } })
   await prisma.deal.deleteMany({
     where: { pipelineId: { in: [pipelineId, otherPipelineId, funnelPipelineId] } },
@@ -390,5 +450,57 @@ describe('GET /api/reports/lost-deals', () => {
     const res = await get('lost-deals', 'manager', '?year=2001')
     expect(res.body.totals).toEqual({ deals: 0, value: 0, averageDeal: 0, averageDaysOpen: 0 })
     expect(res.body.biggest).toEqual([])
+  })
+})
+
+describe('GET /api/reports/team-performance', () => {
+  it('requires login, reports:read and a valid year', async () => {
+    expect((await request(app).get('/api/reports/team-performance')).status).toBe(401)
+    expect((await get('team-performance', 'sales')).status).toBe(403)
+    const bad = await get('team-performance', 'manager', '?year=abc')
+    expect(bad.status).toBe(400)
+    expect(bad.body.error.details.year).toBe('Enter a valid year')
+  })
+
+  it('summarises each person for the year', async () => {
+    const res = await get('team-performance', 'manager', `?year=${TEAM_YEAR}`)
+    expect(res.status).toBe(200)
+    const mine = res.body.members.filter((m: { name: string }) => m.name.endsWith('Rep'))
+    expect(mine.map((m: { name: string }) => m.name)).toEqual(['sales Rep', 'manager Rep'])
+    expect(mine[0]).toMatchObject({
+      role: 'SALES',
+      dealsWon: 2,
+      dealsLost: 1,
+      winRatePercent: (2 / 3) * 100,
+      revenue: 3000,
+      openDeals: 1,
+      openValue: 700,
+      leads: 2,
+      leadsConverted: 0,
+      activities: 2,
+      tasksCompleted: 1,
+      tasksOpen: 1,
+      tasksOverdue: 0,
+    })
+    // The manager only has an overdue task, and no closed deals so no win rate.
+    expect(mine[1]).toMatchObject({
+      role: 'MANAGER',
+      dealsWon: 0,
+      winRatePercent: null,
+      tasksOpen: 1,
+      tasksOverdue: 1,
+    })
+    expect(res.body.totals.revenue).toBeGreaterThanOrEqual(3000)
+  })
+
+  it('leaves out people with nothing in a year', async () => {
+    const res = await get('team-performance', 'manager', '?year=2001')
+    const mine = res.body.members.filter((m: { name: string }) => m.name.endsWith('Rep'))
+    // Sam's activity in 2001 is the only thing that year; Mia's open task is a snapshot, so she is listed.
+    expect(mine.map((m: { name: string }) => m.name)).toEqual(['manager Rep', 'sales Rep'])
+    expect(mine.find((m: { name: string }) => m.name === 'sales Rep')).toMatchObject({
+      dealsWon: 0,
+      activities: 1,
+    })
   })
 })

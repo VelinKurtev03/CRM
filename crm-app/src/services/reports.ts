@@ -104,3 +104,43 @@ export const getWinRate = (year: number) =>
 
 export const getLostDeals = (year: number) =>
   api.get<LostDealsReport>('/reports/lost-deals', { params: { year } }).then((r) => r.data)
+
+export type TeamMember = {
+  userId: string
+  name: string
+  role: string
+  dealsWon: number
+  dealsLost: number
+  /** Null when the person closed no deals in the year. */
+  winRatePercent: number | null
+  revenue: number
+  /** Today's open deals, not limited to the year. */
+  openDeals: number
+  openValue: number
+  leads: number
+  leadsConverted: number
+  activities: number
+  tasksCompleted: number
+  tasksOpen: number
+  tasksOverdue: number
+}
+export type TeamPerformanceReport = {
+  year: number
+  /** Highest revenue first. */
+  members: TeamMember[]
+  totals: {
+    dealsWon: number
+    dealsLost: number
+    winRatePercent: number | null
+    revenue: number
+    activities: number
+    tasksCompleted: number
+    tasksOverdue: number
+  }
+}
+
+/** Needs `reports:read`. */
+export const getTeamPerformance = (year: number) =>
+  api
+    .get<TeamPerformanceReport>('/reports/team-performance', { params: { year } })
+    .then((r) => r.data)
