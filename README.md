@@ -24,6 +24,7 @@ npm install
 npm run db:up                 # starts PostgreSQL (port 5433) and Mailpit via Docker
 npm run db:deploy             # applies the migrations
 npm run db:seed               # roles, permissions, default pipeline and an admin user
+npm run db:seed:demo          # optional demo data (dev only, skipped if already present)
 npm run dev                   # http://localhost:4000
 
 # 2. Web app (second terminal)
