@@ -11,7 +11,7 @@ import {
   startOfWeek,
 } from 'date-fns'
 
-import type { CalendarItem } from '@/services/calendar'
+import type { CalendarItem, EventSchedule } from '@/services/calendar'
 
 export const VIEWS = ['day', 'week', 'month'] as const
 export type CalendarView = (typeof VIEWS)[number]
@@ -79,4 +79,37 @@ export function groupByDay(items: CalendarItem[]) {
     )
   }
   return byDay
+}
+
+/** Items you can move: your events, and tasks. */
+export const isMovable = (item: CalendarItem) => item.kind === 'EVENT' || item.kind === 'TASK'
+
+/** `date` (`YYYY-MM-DD`) and `time` (`HH:mm`) in the viewer's time zone, as an instant. */
+const instant = (date: string, time: string) => new Date(`${date}T${time}`).toISOString()
+
+/** What the form asks for, as the API expects it; `null` if the end is not after the start. */
+export function toSchedule(v: {
+  date: string
+  allDay: boolean
+  start: string
+  end: string
+}): EventSchedule | null {
+  if (v.allDay) return { allDay: true, startsAt: v.date }
+  const startsAt = instant(v.date, v.start)
+  if (!v.end) return { allDay: false, startsAt }
+  const endsAt = instant(v.date, v.end)
+  return endsAt > startsAt ? { allDay: false, startsAt, endsAt } : null
+}
+
+/** An event moved to another day, keeping its time of day and length. */
+export function moveEvent(item: CalendarItem, date: string): EventSchedule {
+  if (item.allDay) return { allDay: true, startsAt: date }
+  const start = new Date(item.at)
+  const length = item.endsAt ? new Date(item.endsAt).getTime() - start.getTime() : 0
+  const startsAt = new Date(`${date}T${format(start, 'HH:mm:ss.SSS')}`)
+  return {
+    allDay: false,
+    startsAt: startsAt.toISOString(),
+    ...(length > 0 && { endsAt: new Date(startsAt.getTime() + length).toISOString() }),
+  }
 }

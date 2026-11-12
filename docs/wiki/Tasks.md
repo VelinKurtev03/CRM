@@ -50,6 +50,6 @@ have no assignee get none. Reminders are in the app only; there is no email yet.
 | Create a task | `tasks:write` (Sales, Support, Manager, Admin) |
 | Link a task to a contact or deal | also `contacts:read` or `deals:read` |
 
-Anyone who can create tasks can assign them to any active user. Editing tasks is a later story.
+Anyone who can create tasks can assign them to any active user. Other editing is a later story. A task's due date can be moved by dragging it on the [[Calendar]].
 
 Endpoints are in the [[API Reference]].

@@ -119,9 +119,9 @@ wiki's Tasks page.
 ## Calendar
 
 **Calendar** in the sidebar (`/calendar`) has Day, Week (the default, Monday to Sunday) and Month views of your own
-calls and meetings (logged activities), tasks assigned to you by due date, and open deals you own by expected close.
+calls and meetings (logged activities), your own events, tasks assigned to you by due date, and open deals you own by expected close.
 Step with the arrows, **Today** jumps to now, and a day opens in the Day view. The view and date are in the address.
-Available to everyone signed in; a source you can't read is left out. See the wiki's Calendar page.
+**Add** (or the **+** on a day) adds an event or a task, and dragging an event or task to another day, or clicking it, moves it. Available to everyone signed in; a source you can't read is left out. See the wiki's Calendar page.
 
 ## Companies
 

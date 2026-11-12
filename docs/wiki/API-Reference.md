@@ -93,7 +93,10 @@ essentials. Deals start in the first stage of the default pipeline.
 
 | Endpoint | Needs | What it does |
 | --- | --- | --- |
-| `GET /calendar` | signed in | Your calls, meetings, task due dates and open-deal close dates between `from` and `to` (`YYYY-MM-DD`, at most 62 days; `offset` = the viewer's `Date.getTimezoneOffset()`). Each source needs its read permission, else it is left out |
+| `GET /calendar` | signed in | Your calls, meetings, events, task due dates and open-deal close dates between `from` and `to` (`YYYY-MM-DD`, at most 62 days; `offset` = the viewer's `Date.getTimezoneOffset()`). Each source needs its read permission, else it is left out |
+| `POST /calendar/events` | signed in | Add an event to your calendar: `title`, `startsAt`, optional `endsAt` (timed events only; default an hour), `allDay` (then `startsAt` is a date), `location`, `description` |
+| `PATCH /calendar/events/{id}` | signed in | Reschedule your own event: `allDay`, `startsAt`, `endsAt`. 404 if it is not yours |
+| `PATCH /tasks/{id}` | `tasks:write` | Move a task to a new `dueDate`; its reminder is sent again |
 | `GET /tasks` | `tasks:read` | Tasks, soonest due first (no due date last), `{ tasks, total, page, pageSize }`. Filters: `assignee` (user id, `me` or `none`), `status`, `priority`, `page`, `pageSize` (default 20, max 100) |
 | `POST /tasks` | `tasks:write` | Create a task: `title`, optional `description`, `status` (default `TODO`), `priority` (default `MEDIUM`), `dueDate` (`YYYY-MM-DD`, due at the end of that day), `reminderMinutes` (15, 60, 1440 or 10080; needs a `dueDate`), `assigneeId` (default you; must be active), `contactId`, `dealId` |
 | `GET /tasks/assignees` | `tasks:read` | Active users a task can be assigned to |

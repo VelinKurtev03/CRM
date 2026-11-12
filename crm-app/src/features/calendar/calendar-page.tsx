@@ -1,11 +1,15 @@
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import { format } from 'date-fns'
+import { useRef, useState } from 'react'
+import { toast } from 'sonner'
 import {
+  CalendarDays,
   CheckSquare,
   ChevronLeft,
   ChevronRight,
   Handshake,
   Phone,
+  Plus,
   Users,
   type LucideIcon,
 } from 'lucide-react'
@@ -15,12 +19,16 @@ import { getErrorMessage } from '@/api/client'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { usePermission } from '@/hooks/use-permission'
-import { getCalendar, type CalendarItem } from '@/services/calendar'
+import { getCalendar, rescheduleEvent, type CalendarItem } from '@/services/calendar'
+import { rescheduleTask } from '@/services/tasks'
 import { cn } from '@/utils/cn'
 import {
   daysBetween,
   groupByDay,
+  itemDayKey,
   heading,
+  isMovable,
+  moveEvent,
   parseKey,
   parseView,
   rangeFor,
@@ -29,6 +37,7 @@ import {
   VIEWS,
   type CalendarView,
 } from './calendar-utils'
+import { ScheduleDialog, useRefreshCalendar, type DialogTarget } from './schedule-dialog'
 
 const KINDS: Record<CalendarItem['kind'], { label: string; icon: LucideIcon; tone: string }> = {
   MEETING: {
@@ -37,6 +46,11 @@ const KINDS: Record<CalendarItem['kind'], { label: string; icon: LucideIcon; ton
     tone: 'bg-blue-500/15 text-blue-700 dark:text-blue-300',
   },
   CALL: { label: 'Call', icon: Phone, tone: 'bg-green-500/15 text-green-700 dark:text-green-300' },
+  EVENT: {
+    label: 'Event',
+    icon: CalendarDays,
+    tone: 'bg-teal-500/15 text-teal-700 dark:text-teal-300',
+  },
   TASK: {
     label: 'Task due',
     icon: CheckSquare,
@@ -59,6 +73,29 @@ export function CalendarPage() {
   const { from, to } = rangeFor(view, anchor)
   const fromKey = toKey(from)
   const toKeyStr = toKey(to)
+
+  const canWriteTasks = usePermission('tasks:write')
+  const refresh = useRefreshCalendar()
+  const [dialog, setDialog] = useState<DialogTarget | null>(null)
+  const dragged = useRef<CalendarItem | null>(null)
+
+  const move = useMutation({
+    mutationFn: ({ item, date }: { item: CalendarItem; date: string }) =>
+      item.kind === 'TASK'
+        ? rescheduleTask(item.id, date)
+        : rescheduleEvent(item.id, moveEvent(item, date)),
+    onSuccess: (_r, { item }) => {
+      toast.success(`${item.title} was moved`)
+      refresh()
+    },
+    onError: (error) => toast.error(getErrorMessage(error, 'Could not move it')),
+  })
+  const drop = (date: Date) => {
+    const item = dragged.current
+    dragged.current = null
+    if (item && itemDayKey(item) !== toKey(date)) move.mutate({ item, date: toKey(date) })
+  }
+  const edit = (item: CalendarItem) => setDialog({ mode: 'move', item })
 
   const go = (next: { view?: CalendarView; date?: Date }) =>
     setSearchParams(
@@ -118,6 +155,13 @@ export function CalendarPage() {
         <h2 className="text-lg font-medium" aria-live="polite">
           {heading(view, anchor)}
         </h2>
+        <Button
+          size="sm"
+          className="ml-auto"
+          onClick={() => setDialog({ mode: 'new', date: toKey(view === 'day' ? anchor : today) })}
+        >
+          <Plus /> Add
+        </Button>
       </div>
 
       <Legend />
@@ -129,7 +173,7 @@ export function CalendarPage() {
       ) : isPending ? (
         <Skeleton aria-label="Loading calendar" className="h-96 w-full" />
       ) : view === 'day' ? (
-        <DayList items={byDay.get(toKey(anchor)) ?? []} />
+        <DayList items={byDay.get(toKey(anchor)) ?? []} edit={edit} drag={dragged} />
       ) : (
         <div>
           {view === 'month' && (
@@ -149,10 +193,21 @@ export function CalendarPage() {
                 outside={view === 'month' && d.getMonth() !== anchor.getMonth()}
                 items={byDay.get(toKey(d)) ?? []}
                 onOpen={() => go({ view: 'day', date: d })}
+                onAdd={() => setDialog({ mode: 'new', date: toKey(d) })}
+                onDrop={() => drop(d)}
+                edit={edit}
+                drag={dragged}
               />
             ))}
           </div>
         </div>
+      )}
+      {dialog && (
+        <ScheduleDialog
+          target={dialog}
+          canAddTask={canWriteTasks}
+          onClose={() => setDialog(null)}
+        />
       )}
     </div>
   )
@@ -180,6 +235,10 @@ function DayCell({
   outside,
   items,
   onOpen,
+  onAdd,
+  onDrop,
+  edit,
+  drag,
 }: {
   date: Date
   view: CalendarView
@@ -187,6 +246,10 @@ function DayCell({
   outside: boolean
   items: CalendarItem[]
   onOpen: () => void
+  onAdd: () => void
+  onDrop: () => void
+  edit: (item: CalendarItem) => void
+  drag: DragRef
 }) {
   const shown = view === 'month' ? items.slice(0, MONTH_LIMIT) : items
   const more = items.length - shown.length
@@ -199,20 +262,35 @@ function DayCell({
         outside && 'bg-muted/40 text-muted-foreground',
         today && 'border-primary',
       )}
+      onDragOver={(e) => drag.current && e.preventDefault()}
+      onDrop={(e) => {
+        e.preventDefault()
+        onDrop()
+      }}
     >
-      <button
-        type="button"
-        onClick={onOpen}
-        aria-label={`Open ${format(date, 'MMMM d')}`}
-        className={cn(
-          'self-start rounded px-1 text-sm hover:bg-accent',
-          today && 'bg-primary font-semibold text-primary-foreground hover:bg-primary',
-        )}
-      >
-        {view === 'week' ? format(date, 'EEE d') : format(date, 'd')}
-      </button>
+      <div className="flex items-center justify-between">
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`Open ${format(date, 'MMMM d')}`}
+          className={cn(
+            'self-start rounded px-1 text-sm hover:bg-accent',
+            today && 'bg-primary font-semibold text-primary-foreground hover:bg-primary',
+          )}
+        >
+          {view === 'week' ? format(date, 'EEE d') : format(date, 'd')}
+        </button>
+        <button
+          type="button"
+          onClick={onAdd}
+          aria-label={`Add on ${format(date, 'MMMM d')}`}
+          className="rounded p-0.5 text-muted-foreground hover:bg-accent hover:text-foreground"
+        >
+          <Plus className="size-3.5" aria-hidden />
+        </button>
+      </div>
       {shown.map((item) => (
-        <Entry key={`${item.kind}-${item.id}`} item={item} compact />
+        <Entry key={`${item.kind}-${item.id}`} item={item} compact edit={edit} drag={drag} />
       ))}
       {more > 0 && (
         <button
@@ -227,7 +305,15 @@ function DayCell({
   )
 }
 
-function DayList({ items }: { items: CalendarItem[] }) {
+function DayList({
+  items,
+  edit,
+  drag,
+}: {
+  items: CalendarItem[]
+  edit: (item: CalendarItem) => void
+  drag: DragRef
+}) {
   if (items.length === 0) {
     return (
       <p className="rounded-md border p-6 text-center text-muted-foreground">
@@ -239,14 +325,27 @@ function DayList({ items }: { items: CalendarItem[] }) {
     <ul className="space-y-2">
       {items.map((item) => (
         <li key={`${item.kind}-${item.id}`}>
-          <Entry item={item} />
+          <Entry item={item} edit={edit} drag={drag} />
         </li>
       ))}
     </ul>
   )
 }
 
-function Entry({ item, compact = false }: { item: CalendarItem; compact?: boolean }) {
+type DragRef = { current: CalendarItem | null }
+
+function Entry({
+  item,
+  compact = false,
+  edit,
+  drag,
+}: {
+  item: CalendarItem
+  compact?: boolean
+  edit: (item: CalendarItem) => void
+  drag: DragRef
+}) {
+  const canWriteTasks = usePermission('tasks:write')
   const canContacts = usePermission('contacts:read')
   const canDeals = usePermission('deals:write')
   const kind = KINDS[item.kind]
@@ -254,8 +353,11 @@ function Entry({ item, compact = false }: { item: CalendarItem; compact?: boolea
   const time = item.allDay ? null : format(new Date(item.at), 'p')
   const done = item.status === 'DONE'
 
-  const to =
-    item.kind === 'TASK'
+  // Your events and tasks open a dialog to move them; they can also be dragged to another day.
+  const movable = isMovable(item) && (item.kind === 'EVENT' || canWriteTasks)
+  const to = movable
+    ? null
+    : item.kind === 'TASK'
       ? '/tasks?assignee=me'
       : item.kind === 'DEAL'
         ? canDeals
@@ -286,6 +388,24 @@ function Entry({ item, compact = false }: { item: CalendarItem; compact?: boolea
     !compact && 'text-sm',
     kind.tone,
   )
+  if (movable) {
+    return (
+      <button
+        type="button"
+        draggable
+        onDragStart={() => {
+          drag.current = item
+        }}
+        onDragEnd={() => {
+          drag.current = null
+        }}
+        onClick={() => edit(item)}
+        className={cn(className, 'w-full cursor-grab text-left hover:underline')}
+      >
+        {body}
+      </button>
+    )
+  }
   return to ? (
     <Link to={to} className={cn(className, 'hover:underline')}>
       {body}

@@ -158,3 +158,25 @@ tasksRouter.post(
     res.status(201).json({ task })
   },
 )
+
+const rescheduleSchema = z.object({
+  dueDate: z.iso.date('Enter a valid date'),
+})
+
+/** Move a task to another due date. Its reminder, if it has one, is sent again for the new date. */
+tasksRouter.patch(
+  '/tasks/:id',
+  requirePermission('tasks:write'),
+  validateBody(rescheduleSchema),
+  async (req, res) => {
+    const id = String(req.params.id)
+    const { dueDate } = req.body as z.infer<typeof rescheduleSchema>
+    if (!(await prisma.task.count({ where: { id } }))) throw new HttpError(404, 'Task not found')
+    const task = await prisma.task.update({
+      where: { id },
+      data: { dueDate: endOfDay(dueDate), remindedAt: null },
+      select: taskSelect,
+    })
+    res.json({ task })
+  },
+)

@@ -44,3 +44,7 @@ export const listTasks = (params: {
   page?: number
   pageSize?: number
 }) => api.get<TasksPage>('/tasks', { params }).then((r) => r.data)
+
+/** Move a task to another due date (`YYYY-MM-DD`). */
+export const rescheduleTask = (id: string, dueDate: string) =>
+  api.patch<{ task: Task }>(`/tasks/${id}`, { dueDate }).then((r) => r.data.task)

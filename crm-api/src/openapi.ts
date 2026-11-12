@@ -1491,7 +1491,7 @@ export const openapi = {
         tags: ['Calendar'],
         summary: 'Calendar items',
         description:
-          "The caller's own calendar from `from` to `to` (inclusive calendar dates, at most 62 days): calls and meetings they logged (`activities:read`), tasks assigned to them by due date (`tasks:read`) and open deals they own by expected close (`deals:read`). A source the caller cannot read is left out. Tasks and deals are `allDay`. `offset` is the viewer's `Date.getTimezoneOffset()`, used to place timed items on their days. Returns `{ items }` in time order, each `{ id, kind (CALL, MEETING, TASK, DEAL), title, at, allDay }`.",
+          "The caller's own calendar from `from` to `to` (inclusive calendar dates, at most 62 days): calls and meetings they logged (`activities:read`), tasks assigned to them by due date (`tasks:read`), their own events (`kind` EVENT, with `endsAt` and `location`) and open deals they own by expected close (`deals:read`). A source the caller cannot read is left out. Tasks and deals are `allDay`. `offset` is the viewer's `Date.getTimezoneOffset()`, used to place timed items on their days. Returns `{ items }` in time order, each `{ id, kind (CALL, MEETING, TASK, EVENT, DEAL), title, at, allDay }`.",
         security: [{ bearerAuth: [] }],
         parameters: [
           { name: 'from', in: 'query', required: true, schema: { type: 'string', format: 'date' } },
@@ -1502,6 +1502,107 @@ export const openapi = {
           '200': { description: 'OK' },
           '400': { description: 'Missing or invalid dates, or more than 62 days' },
           '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/calendar/events': {
+      post: {
+        tags: ['Calendar'],
+        summary: 'Create event',
+        description:
+          'Adds an event to your own calendar; any signed-in user. A timed event lasts an hour unless `endsAt` is given. An all-day event takes a date as `startsAt`.',
+        security: [{ bearerAuth: [] }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['title', 'startsAt'],
+                properties: {
+                  title: { type: 'string', maxLength: 200 },
+                  description: { type: 'string', maxLength: 5000 },
+                  location: { type: 'string', maxLength: 200 },
+                  allDay: { type: 'boolean', default: false },
+                  startsAt: { type: 'string' },
+                  endsAt: { type: 'string' },
+                },
+              },
+            },
+          },
+        },
+        responses: {
+          '201': { description: 'Created. Returns `event`.' },
+          '400': { description: 'Validation failed' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+        },
+      },
+    },
+    '/calendar/events/{id}': {
+      patch: {
+        tags: ['Calendar'],
+        summary: 'Reschedule event',
+        description:
+          'Moves one of your own events: send `allDay`, `startsAt` and optionally `endsAt`.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                properties: {
+                  allDay: { type: 'boolean', default: false },
+                  startsAt: {
+                    type: 'string',
+                    description:
+                      'A date for an all-day event, otherwise a date and time (ISO 8601).',
+                  },
+                  endsAt: {
+                    type: 'string',
+                    description: 'Timed events only; after the start. Defaults to an hour later.',
+                  },
+                },
+                required: ['startsAt'],
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'OK. Returns `event`.' },
+          '400': { description: 'Validation failed' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '404': { description: 'Not found, or not yours' },
+        },
+      },
+    },
+    '/tasks/{id}': {
+      patch: {
+        tags: ['Tasks'],
+        summary: 'Reschedule task',
+        description:
+          'Requires `tasks:write`. Moves the task to a new `dueDate` (`YYYY-MM-DD`, due at the end of that day). A reminder is sent again for the new date.',
+        security: [{ bearerAuth: [] }],
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': {
+              schema: {
+                type: 'object',
+                required: ['dueDate'],
+                properties: { dueDate: { type: 'string', format: 'date' } },
+              },
+            },
+          },
+        },
+        responses: {
+          '200': { description: 'OK. Returns `task`.' },
+          '400': { description: 'Validation failed' },
+          '401': { $ref: '#/components/responses/Unauthorized' },
+          '403': { $ref: '#/components/responses/Forbidden' },
+          '404': { description: 'Task not found' },
         },
       },
     },

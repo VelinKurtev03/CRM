@@ -291,6 +291,49 @@ describe('GET /api/tasks', () => {
   })
 })
 
+describe('PATCH /api/tasks/:id', () => {
+  const patch = (who: Who, id: string, body: object) =>
+    request(app).patch(`/api/tasks/${id}`).set(as(who)).send(body)
+  const make = async (extra: object = {}) =>
+    (await create('sales', { title: `tk-${stamp}-resched`, dueDate: '2031-06-01', ...extra })).body
+      .task.id as string
+
+  it('requires login', async () => {
+    expect((await request(app).patch('/api/tasks/x').send({ dueDate: '2031-06-02' })).status).toBe(
+      401,
+    )
+  })
+
+  it('moves the due date to the end of the new day', async () => {
+    const id = await make()
+    const res = await patch('sales', id, { dueDate: '2031-06-09' })
+    expect(res.status).toBe(200)
+    expect(res.body.task).toMatchObject({ id, dueDate: '2031-06-09T23:59:59.999Z' })
+  })
+
+  it('sets a due date on a task that had none', async () => {
+    const id = await make({ dueDate: undefined })
+    expect((await patch('sales', id, { dueDate: '2031-06-09' })).body.task.dueDate).toBe(
+      '2031-06-09T23:59:59.999Z',
+    )
+  })
+
+  it('sends the reminder again for the new date', async () => {
+    const id = await make({ reminderMinutes: 60 })
+    await prisma.task.update({ where: { id }, data: { remindedAt: new Date() } })
+    await patch('sales', id, { dueDate: '2031-06-09' })
+    expect((await prisma.task.findUnique({ where: { id } }))!.remindedAt).toBeNull()
+  })
+
+  it('validates the date, and needs an existing task and tasks:write', async () => {
+    const id = await make()
+    expect((await patch('sales', id, { dueDate: 'soon' })).status).toBe(400)
+    expect((await patch('sales', id, {})).status).toBe(400)
+    expect((await patch('sales', 'nope', { dueDate: '2031-06-09' })).status).toBe(404)
+    expect((await patch('none', id, { dueDate: '2031-06-09' })).status).toBe(403)
+  })
+})
+
 describe('task reminders', () => {
   const HOUR = 3_600_000
   const now = new Date()

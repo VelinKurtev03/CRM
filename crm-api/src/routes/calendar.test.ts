@@ -120,6 +120,7 @@ beforeAll(async () => {
 })
 
 afterAll(async () => {
+  await prisma.calendarEvent.deleteMany({ where: { title: { startsWith: `cal-${stamp}` } } })
   await prisma.activity.deleteMany({ where: { subject: { startsWith: `cal-${stamp}` } } })
   await prisma.task.deleteMany({ where: { title: { startsWith: `cal-${stamp}` } } })
   await prisma.deal.deleteMany({ where: { title: { startsWith: `cal-${stamp}` } } })
@@ -188,5 +189,113 @@ describe('GET /api/calendar', () => {
     ]) {
       expect((await get('sales', q)).status, q).toBe(400)
     }
+  })
+})
+
+describe('calendar events', () => {
+  const auth = (who: Who) => ({ Authorization: `Bearer ${tokens[who]}` })
+  const post = (who: Who | null, body: object) => {
+    const r = request(app).post('/api/calendar/events')
+    return (who ? r.set(auth(who)) : r).send(body)
+  }
+  const patch = (who: Who, id: string, body: object) =>
+    request(app).patch(`/api/calendar/events/${id}`).set(auth(who)).send(body)
+
+  it('requires login', async () => {
+    expect((await post(null, { title: 'x', startsAt: '2031-04-01T09:00:00Z' })).status).toBe(401)
+  })
+
+  it('creates a timed event that lasts an hour by default and shows on the calendar', async () => {
+    const res = await post('sales', {
+      title: t('standup'),
+      location: ' Room 4 ',
+      startsAt: '2031-04-01T09:00:00Z',
+    })
+    expect(res.status).toBe(201)
+    expect(res.body.event).toMatchObject({
+      title: t('standup'),
+      location: 'Room 4',
+      allDay: false,
+      startsAt: '2031-04-01T09:00:00.000Z',
+      endsAt: '2031-04-01T10:00:00.000Z',
+    })
+    const cal = await get('sales', 'from=2031-04-01&to=2031-04-01')
+    expect(cal.body.items.find((i: Item) => i.title === t('standup'))).toMatchObject({
+      kind: 'EVENT',
+      allDay: false,
+      location: 'Room 4',
+    })
+  })
+
+  it('creates an all-day event on its day, and an event with an end time', async () => {
+    const allDay = await post('sales', {
+      title: t('offsite'),
+      allDay: true,
+      startsAt: '2031-04-02',
+    })
+    expect(allDay.status).toBe(201)
+    expect(allDay.body.event.startsAt).toBe('2031-04-02T00:00:00.000Z')
+    const timed = await post('sales', {
+      title: t('workshop'),
+      startsAt: '2031-04-03T09:00:00Z',
+      endsAt: '2031-04-03T12:30:00Z',
+    })
+    expect(timed.body.event.endsAt).toBe('2031-04-03T12:30:00.000Z')
+    expect(mine((await get('sales', 'from=2031-04-02&to=2031-04-02')).body.items)).toContain(
+      t('offsite'),
+    )
+  })
+
+  it('keeps events private to their owner', async () => {
+    await post('sales', { title: t('private'), allDay: true, startsAt: '2031-04-04' })
+    expect(
+      mine((await get('tasksOnly', 'from=2031-04-01&to=2031-04-30')).body.items),
+    ).not.toContain(t('private'))
+  })
+
+  it('validates the title and times with field errors', async () => {
+    const bad = async (body: object, field: string) => {
+      const res = await post('sales', body)
+      expect(res.status, JSON.stringify(body)).toBe(400)
+      expect(res.body.error.details[field]).toBeTruthy()
+    }
+    await bad({ title: ' ', startsAt: '2031-04-01T09:00:00Z' }, 'title')
+    await bad({ title: 'x', startsAt: 'tomorrow' }, 'startsAt')
+    await bad({ title: 'x', startsAt: '2031-04-01' }, 'startsAt')
+    await bad({ title: 'x', allDay: true, startsAt: '2031-02-30' }, 'startsAt')
+    await bad({ title: 'x', allDay: true, startsAt: '2031-04-01T09:00:00Z' }, 'startsAt')
+    await bad(
+      { title: 'x', startsAt: '2031-04-01T09:00:00Z', endsAt: '2031-04-01T08:00:00Z' },
+      'endsAt',
+    )
+    await bad({ title: 'x', allDay: true, startsAt: '2031-04-01', endsAt: '2031-04-02' }, 'endsAt')
+  })
+
+  it('reschedules an event to another day or time, and to all-day', async () => {
+    const id = (await post('sales', { title: t('move'), startsAt: '2031-05-01T09:00:00Z' })).body
+      .event.id
+    const moved = await patch('sales', id, { allDay: false, startsAt: '2031-05-02T15:00:00Z' })
+    expect(moved.status).toBe(200)
+    expect(moved.body.event).toMatchObject({
+      title: t('move'),
+      startsAt: '2031-05-02T15:00:00.000Z',
+      endsAt: '2031-05-02T16:00:00.000Z',
+    })
+    const day = await patch('sales', id, { allDay: true, startsAt: '2031-05-03' })
+    expect(day.body.event).toMatchObject({ allDay: true, startsAt: '2031-05-03T00:00:00.000Z' })
+    expect(mine((await get('sales', 'from=2031-05-03&to=2031-05-03')).body.items)).toEqual([
+      t('move'),
+    ])
+    expect(mine((await get('sales', 'from=2031-05-01&to=2031-05-02')).body.items)).not.toContain(
+      t('move'),
+    )
+  })
+
+  it('will not reschedule someone else’s event, or one that does not exist', async () => {
+    const id = (await post('sales', { title: t('mine'), startsAt: '2031-05-10T09:00:00Z' })).body
+      .event.id
+    expect((await patch('tasksOnly', id, { startsAt: '2031-05-11T09:00:00Z' })).status).toBe(404)
+    expect((await patch('sales', 'nope', { startsAt: '2031-05-11T09:00:00Z' })).status).toBe(404)
+    expect((await patch('sales', id, { startsAt: 'bad' })).status).toBe(400)
   })
 })
