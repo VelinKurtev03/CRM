@@ -3,7 +3,13 @@ import bcrypt from 'bcryptjs'
 import { PrismaPg } from '@prisma/adapter-pg'
 
 import { PrismaClient } from '../src/generated/prisma/client.js'
-import type { ActivityType, LeadPriority, LeadStatus } from '../src/generated/prisma/client.js'
+import type {
+  ActivityType,
+  LeadPriority,
+  LeadStatus,
+  TaskPriority,
+  TaskStatus,
+} from '../src/generated/prisma/client.js'
 import { ensureFirstDealStage } from '../src/lib/default-pipeline.js'
 import { syncPermissions } from '../src/lib/permissions.js'
 
@@ -150,9 +156,207 @@ const NOTE_BODIES = [
   'Champion on the customer side is the IT manager.',
 ]
 
+const TASKS: [string, TaskStatus, TaskPriority, number | null, number | null][] = [
+  // [title, status, priority, due in days (negative = overdue), reminder minutes]
+  ['Send revised quote', 'TODO', 'HIGH', 1, 60],
+  ['Prepare demo environment', 'IN_PROGRESS', 'MEDIUM', 2, 1440],
+  ['Call back about onboarding', 'TODO', 'MEDIUM', 0, 30],
+  ['Chase signed contract', 'TODO', 'HIGH', -2, null],
+  ['Update CRM notes after workshop', 'DONE', 'LOW', -3, null],
+  ['Book follow-up meeting', 'TODO', 'LOW', 5, null],
+  ['Review security questionnaire', 'IN_PROGRESS', 'HIGH', 3, 120],
+  ['Share case study', 'DONE', 'LOW', -6, null],
+  ['Renewal pricing check', 'TODO', 'MEDIUM', 9, 1440],
+  ['Intro email to new champion', 'TODO', 'MEDIUM', 7, null],
+  ['Internal deal review', 'TODO', 'HIGH', 12, 60],
+  ['Plan QBR agenda', 'IN_PROGRESS', 'LOW', 15, null],
+]
+
+const EVENTS: [string, string | null, number, number, number, boolean][] = [
+  // [title, location, day offset, start hour (UTC), duration in hours, all day]
+  ['Weekly pipeline review', 'Meeting room 2', 0, 9, 1, false],
+  ['Discovery call – Acme', 'Zoom', 1, 14, 1, false],
+  ['Product demo – Globex', 'Zoom', 2, 11, 1, false],
+  ['Lunch with Northwind', 'Café Roma', 3, 12, 2, false],
+  ['Team offsite', 'Head office', 6, 0, 24, true],
+  ['Contract negotiation – Umbrella', 'Teams', 4, 15, 1, false],
+  ['QBR – Stark Renewables', 'Munich office', 8, 10, 3, false],
+  ['Sales training', 'Online', 10, 13, 2, false],
+  ['Customer success sync', 'Meeting room 1', -2, 10, 1, false],
+  ['Kick-off – Initech', 'Zoom', -5, 15, 1, false],
+  ['Public holiday', null, 14, 0, 24, true],
+  ['Board forecast prep', 'Head office', 11, 9, 2, false],
+]
+
+/**
+ * Fills tables the main seed leaves empty (tasks, calendar events, notifications, emails, documents,
+ * lead attachments). Each block only runs when its table has little or no data, so it is safe to repeat.
+ */
+async function topUp() {
+  const users = await prisma.user.findMany({
+    where: { isActive: true },
+    orderBy: { createdAt: 'asc' },
+  })
+  if (users.length === 0) return
+  const [contacts, deals, leads] = await Promise.all([
+    prisma.contact.findMany({ take: 30, orderBy: { createdAt: 'asc' } }),
+    prisma.deal.findMany({ take: 20, orderBy: { createdAt: 'asc' } }),
+    prisma.lead.findMany({ take: 10, orderBy: { createdAt: 'asc' } }),
+  ])
+  const added: string[] = []
+
+  if ((await prisma.task.count()) < 5) {
+    for (const [i, [title, status, priority, due, reminder]] of TASKS.entries()) {
+      const assignee = users[i % users.length]
+      const dueDate = due === null ? null : new Date(Date.now() + due * DAY)
+      await prisma.task.create({
+        data: {
+          title,
+          description: i % 2 === 0 ? 'Created from the demo data.' : null,
+          status,
+          priority,
+          dueDate,
+          reminderMinutes: dueDate ? reminder : null,
+          assigneeId: assignee.id,
+          creatorId: users[(i + 1) % users.length].id,
+          contactId: i % 3 === 0 && contacts.length ? contacts[i % contacts.length].id : null,
+          dealId: i % 3 === 1 && deals.length ? deals[i % deals.length].id : null,
+        },
+      })
+    }
+    added.push(`${TASKS.length} tasks`)
+  }
+
+  if ((await prisma.calendarEvent.count()) === 0) {
+    for (const [i, [title, location, offset, hour, hours, allDay]] of EVENTS.entries()) {
+      const day = new Date()
+      day.setUTCHours(hour, 0, 0, 0)
+      const startsAt = new Date(day.getTime() + offset * DAY)
+      await prisma.calendarEvent.create({
+        data: {
+          title,
+          location,
+          description: i % 2 === 0 ? 'Agenda to be shared beforehand.' : null,
+          startsAt,
+          endsAt: new Date(startsAt.getTime() + hours * 60 * 60 * 1000 - (allDay ? 1000 : 0)),
+          allDay,
+          userId: users[i % users.length].id,
+        },
+      })
+    }
+    added.push(`${EVENTS.length} calendar events`)
+  }
+
+  if ((await prisma.notification.count()) === 0) {
+    const messages = [
+      ['TASK_REMINDER', 'Task "Send revised quote" is due tomorrow'],
+      ['TASK_REMINDER', 'Task "Chase signed contract" was overdue'],
+      ['TASK_ASSIGNED', 'You were assigned "Prepare demo environment"'],
+      ['DEAL_WON', 'Deal "Globex – Add-on seats" was marked as won'],
+    ]
+    for (const user of users) {
+      for (const [i, [type, message]] of messages.entries()) {
+        await prisma.notification.create({
+          data: {
+            type,
+            message,
+            userId: user.id,
+            readAt: i >= 3 ? daysAgo(1) : null,
+            createdAt: daysAgo(i * 0.5),
+          },
+        })
+      }
+    }
+    added.push(`${users.length * messages.length} notifications`)
+  }
+
+  if ((await prisma.email.count()) === 0 && contacts.length) {
+    const subjects = [
+      'Following up on our call',
+      'Proposal and pricing',
+      'Meeting recap',
+      'Quick question about onboarding',
+    ]
+    let n = 0
+    for (const [i, contact] of contacts.slice(0, 12).entries()) {
+      const user = users[i % users.length]
+      for (const k of [0, 1]) {
+        const outbound = k === 0
+        const sentAt = daysAgo(3 + i + k)
+        await prisma.email.create({
+          data: {
+            subject: (outbound ? '' : 'Re: ') + subjects[i % subjects.length],
+            body: outbound
+              ? `Hi ${contact.firstName},\n\nThanks for your time. Sharing the details we discussed.\n\nBest,\n${user.firstName}`
+              : `Hi ${user.firstName},\n\nThanks, this is helpful. Let's talk next week.\n\n${contact.firstName}`,
+            fromAddr: outbound ? user.email : (contact.email ?? 'contact@example.com'),
+            toAddr: outbound ? (contact.email ?? 'contact@example.com') : user.email,
+            sentAt,
+            userId: user.id,
+            contactId: contact.id,
+            createdAt: sentAt,
+          },
+        })
+        n++
+      }
+    }
+    added.push(`${n} emails`)
+  }
+
+  if ((await prisma.document.count()) === 0 && deals.length) {
+    const docs = [
+      ['Proposal.pdf', 'application/pdf', 184_320],
+      [
+        'Contract-draft.docx',
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        96_256,
+      ],
+      ['Pricing.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 42_100],
+    ] as const
+    let n = 0
+    for (const [i, deal] of deals.slice(0, 8).entries()) {
+      const [name, mimeType, sizeBytes] = docs[i % docs.length]
+      await prisma.document.create({
+        data: {
+          name,
+          mimeType,
+          sizeBytes,
+          url: `https://files.example/${deal.id}/${name}`,
+          uploadedById: users[i % users.length].id,
+          dealId: deal.id,
+        },
+      })
+      n++
+    }
+    added.push(`${n} documents`)
+  }
+
+  if ((await prisma.leadAttachment.count()) === 0 && leads.length) {
+    let n = 0
+    for (const [i, lead] of leads.slice(0, 5).entries()) {
+      const data = Buffer.from(`Demo attachment for lead "${lead.title}".\n`)
+      await prisma.leadAttachment.create({
+        data: {
+          leadId: lead.id,
+          name: i % 2 === 0 ? 'requirements.txt' : 'notes.txt',
+          mimeType: 'text/plain',
+          sizeBytes: data.length,
+          data,
+          uploadedById: users[i % users.length].id,
+        },
+      })
+      n++
+    }
+    added.push(`${n} lead attachments`)
+  }
+
+  console.log(added.length ? `Topped up: ${added.join(', ')}` : 'Nothing to top up.')
+}
+
 async function main() {
   if (await prisma.user.findUnique({ where: { email: TEAM[0].email } })) {
-    console.log('Demo data already present, nothing to do.')
+    console.log('Demo team already present, skipping the main seed.')
+    await topUp()
     return
   }
 
@@ -343,6 +547,7 @@ async function main() {
     }
   }
 
+  await topUp()
   console.log(
     `Seeded demo data: ${team.length} users (password ${DEMO_PASSWORD}), ${companies.length} companies, ` +
       `${contacts.length} contacts, ${LEADS.length} leads, ${deals.length} deals`,
